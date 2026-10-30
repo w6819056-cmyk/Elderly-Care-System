@@ -42,13 +42,18 @@ public final class Ed25519LicenseSigner implements LicenseSigner {
     }
 
     @Override
-    public String sign(String payload) {
-        Objects.requireNonNull(payload, "payload must not be null");
+    public LicenseDocument sign(LicenseDocument document) {
+        Objects.requireNonNull(document, "document must not be null");
+        LicenseDocument unsigned = document.withSignature(
+                new LicenseSignature(algorithm(), keyId, null)
+        );
+        String payload = LicenseCanonicalizer.canonicalize(unsigned);
         try {
             Signature signer = Signature.getInstance("Ed25519");
             signer.initSign(privateKey);
             signer.update(payload.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(signer.sign());
+            String value = Base64.getEncoder().encodeToString(signer.sign());
+            return document.withSignature(new LicenseSignature(algorithm(), keyId, value));
         } catch (GeneralSecurityException exception) {
             throw new IllegalStateException("Failed to sign license payload", exception);
         }

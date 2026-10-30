@@ -611,7 +611,7 @@ git commit -m "feat(platform): add plans order pricing and idempotency"
 - Produces: `EntitlementService.applyPaidOrder(long orderId)` and `EntitlementService.deriveStatus(Entitlement entitlement, Instant now)`.
 - Produces: `LicenseIssueService.issueForInstance(long instanceId, String traceId)` returning `IssuedLicense(long version, String payloadJson, String signature, String licenseId)`.
 
-- [ ] **Step 1: Write failing signer tests**
+- [x] **Step 1: Write failing signer tests**
 
 ```java
 @Test
@@ -624,20 +624,20 @@ void rejectsAnyPayloadMutation() { ... }
 void rejectsDifferentPublicKey() { ... }
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `mvn -f backend/pom.xml -pl platform/platform-licensing -am test -Dtest=LicenseSignerTest`
 Expected: compilation failure.
 
-- [ ] **Step 3: Implement canonical signing**
+- [x] **Step 3: Implement canonical signing**
 
 Serialize the payload without `signature.value` using Jackson with sorted properties, stable date formatting and no pretty printing. Sign UTF-8 bytes with Ed25519. Persist algorithm and `keyId`. Verification reconstructs the same canonical bytes and returns false for mutation, wrong key or malformed signature. Do not leak raw cryptography exceptions from controllers.
 
-- [ ] **Step 4: Implement entitlement effects**
+- [x] **Step 4: Implement entitlement effects**
 
 Order fulfillment updates each entitlement in one transaction. For a new module, set start to fulfillment time. For an active period entitlement, add purchased days to existing expiry. For perpetual purchase, set `perpetual=true` and `expires_at=null`. A platform grant has `license_type=PLATFORM_GRANT`; a trial has `license_type=TRIAL` and cannot satisfy dependencies. Each change increments entitlement version and issues a new license version.
 
-- [ ] **Step 5: Implement license state derivation**
+- [x] **Step 5: Implement license state derivation**
 
 Derive module license status from the fixed clock:
 
@@ -649,12 +649,12 @@ now > expires_at + 3 days -> READ_ONLY
 enterprise/instance/module suspended -> SUSPENDED
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `mvn -f backend/pom.xml -pl platform/platform-licensing,platform/platform-core -am test`
 Expected: PASS for all licensing and entitlement tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add backend/platform/platform-licensing backend/platform/platform-core

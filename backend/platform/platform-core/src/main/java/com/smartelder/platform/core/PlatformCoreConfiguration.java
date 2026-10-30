@@ -10,6 +10,8 @@ import com.smartelder.platform.core.catalog.ModuleVersionService;
 import com.smartelder.platform.core.common.IdempotencyService;
 import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
+import com.smartelder.platform.core.commerce.EntitlementService;
+import com.smartelder.platform.core.commerce.LicenseIssueService;
 import com.smartelder.platform.core.commerce.OrderQuoteService;
 import com.smartelder.platform.core.commerce.PlanService;
 import com.smartelder.platform.core.commerce.SalesOrderService;
@@ -135,6 +137,38 @@ public class PlatformCoreConfiguration {
     }
 
     @Bean
+    LicenseIssueService platformLicenseIssueService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            LicenseSigner licenseSigner,
+            PlatformClock clock,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new LicenseIssueService(
+                jdbcClient,
+                objectMapper,
+                licenseSigner,
+                clock,
+                transactionManager
+        );
+    }
+
+    @Bean
+    EntitlementService platformEntitlementService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            LicenseIssueService licenseIssueService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new EntitlementService(
+                jdbcClient,
+                clock,
+                licenseIssueService,
+                transactionManager
+        );
+    }
+
+    @Bean
     ActivationService platformActivationService(
             JdbcClient jdbcClient,
             PlatformClock clock,
@@ -231,6 +265,7 @@ public class PlatformCoreConfiguration {
             PlatformAuditService auditService,
             OrderQuoteService quoteService,
             IdempotencyService idempotencyService,
+            EntitlementService entitlementService,
             PlatformTransactionManager transactionManager
     ) {
         return new SalesOrderService(
@@ -240,6 +275,7 @@ public class PlatformCoreConfiguration {
                 auditService,
                 quoteService,
                 idempotencyService,
+                entitlementService,
                 transactionManager
         );
     }

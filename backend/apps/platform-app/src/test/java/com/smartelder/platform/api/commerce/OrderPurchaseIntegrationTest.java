@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.platform.PlatformApplication;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -167,6 +169,8 @@ class OrderPurchaseIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
+        long instanceId = createDeploymentInstance(enterpriseId);
+
         String transactionNo = "mock_" + UUID.randomUUID();
         mvc.perform(post("/api/platform/v1/orders/{publicId}/pay-simulated", orderId)
                         .header("Authorization", bearer(token))
@@ -175,7 +179,7 @@ class OrderPurchaseIntegrationTest {
                                 {"channel":"MOCK","channelTransactionNo":"%s"}
                                 """.formatted(transactionNo)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PAID"))
+                .andExpect(jsonPath("$.data.status").value("FULFILLED"))
                 .andExpect(jsonPath("$.data.payments.length()").value(1))
                 .andExpect(jsonPath("$.data.payments[0].channelTransactionNo").value(transactionNo));
 
@@ -186,8 +190,38 @@ class OrderPurchaseIntegrationTest {
                                 {"channel":"MOCK","channelTransactionNo":"%s"}
                                 """.formatted(transactionNo)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PAID"));
+                .andExpect(jsonPath("$.data.status").value("FULFILLED"));
         assertThat(count("SELECT COUNT(*) FROM pf_payment_transaction WHERE order_id = (SELECT id FROM pf_subscription_order WHERE public_id = :id)", orderId)).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM pf_entitlement WHERE enterprise_id = (SELECT id FROM pf_enterprise WHERE public_id = :id) AND license_type = 'FORMAL' AND status = 'ACTIVE'", enterpriseId)).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM pf_subscription_order_item WHERE order_id = (SELECT id FROM pf_subscription_order WHERE public_id = :id) AND entitlement_result = 'APPLIED'", orderId)).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM pf_license WHERE instance_id = :id", instanceId)).isEqualTo(1);
+        assertThat(jdbcClient.sql("SELECT license_version FROM pf_deployment_instance WHERE id = :id")
+                .param("id", instanceId)
+                .query(Long.class)
+                .single()).isEqualTo(1L);
+
+        String licensePayload = jdbcClient.sql("SELECT payload_json FROM pf_license WHERE instance_id = :id")
+                .param("id", instanceId)
+                .query(String.class)
+                .single();
+        JsonNode licensedModules = objectMapper.readTree(licensePayload).path("modules");
+        assertThat(licensedModules).hasSize(2);
+        List<String> licensedModuleCodes = new ArrayList<>();
+        licensedModules.forEach(module -> {
+            licensedModuleCodes.add(module.path("code").asText());
+            assertThat(module.path("status").asText()).isEqualTo("ACTIVE");
+        });
+        List<String> expectedModuleOrder = jdbcClient.sql("""
+                        SELECT m.code
+                        FROM pf_entitlement e
+                        JOIN pf_module_definition m ON m.id = e.module_id
+                        WHERE e.enterprise_id = (SELECT id FROM pf_enterprise WHERE public_id = :enterpriseId)
+                        ORDER BY m.menu_order, m.id
+                        """)
+                .param("enterpriseId", enterpriseId)
+                .query(String.class)
+                .list();
+        assertThat(licensedModuleCodes).containsExactlyElementsOf(expectedModuleOrder);
 
         mvc.perform(post("/api/platform/v1/orders/{publicId}/pay-simulated", orderId)
                         .header("Authorization", bearer(token))
@@ -202,7 +236,7 @@ class OrderPurchaseIntegrationTest {
         mvc.perform(get("/api/platform/v1/orders/{publicId}", orderId)
                         .header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("PAID"))
+                .andExpect(jsonPath("$.data.status").value("FULFILLED"))
                 .andExpect(jsonPath("$.data.items[1].moduleName").value("机构康养"));
 
         mvc.perform(post("/api/platform/v1/orders/{publicId}/refund", orderId)
@@ -348,6 +382,31 @@ class OrderPurchaseIntegrationTest {
                 .path("data").path("publicId").asText();
     }
 
+    private long createDeploymentInstance(String enterpriseId) {
+        String publicId = "inst_" + UUID.randomUUID().toString().replace("-", "");
+        int inserted = jdbcClient.sql("""
+                        INSERT INTO pf_deployment_instance(
+                            public_id, enterprise_id, installation_id, tenant_database_id,
+                            public_key_pem, fingerprint, status, license_version, created_at, updated_at
+                        )
+                        SELECT :publicId, id, :installationId, :tenantDatabaseId,
+                               'test-public-key', :fingerprint, 'ACTIVE', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        FROM pf_enterprise
+                        WHERE public_id = :enterpriseId
+                        """)
+                .param("publicId", publicId)
+                .param("installationId", "install_" + UUID.randomUUID())
+                .param("tenantDatabaseId", "tenant_" + UUID.randomUUID())
+                .param("fingerprint", "fp_" + UUID.randomUUID())
+                .param("enterpriseId", enterpriseId)
+                .update();
+        assertThat(inserted).isOne();
+        return jdbcClient.sql("SELECT id FROM pf_deployment_instance WHERE public_id = :id")
+                .param("id", publicId)
+                .query(Long.class)
+                .single();
+    }
+
     private String directBody(String enterpriseId, String moduleCode, int storeQuota) {
         return """
                 {
@@ -375,7 +434,7 @@ class OrderPurchaseIntegrationTest {
                 """.formatted(enterpriseId, dependencyCode, mainCode);
     }
 
-    private long count(String sql, String parameter) {
+    private long count(String sql, Object parameter) {
         return jdbcClient.sql(sql)
                 .param("id", parameter)
                 .query(Long.class)

@@ -52,6 +52,7 @@ public class SalesOrderService {
     private final PlatformAuditService auditService;
     private final OrderQuoteService quoteService;
     private final IdempotencyService idempotencyService;
+    private final EntitlementService entitlementService;
     private final TransactionTemplate transactionTemplate;
 
     public SalesOrderService(
@@ -61,6 +62,7 @@ public class SalesOrderService {
             PlatformAuditService auditService,
             OrderQuoteService quoteService,
             IdempotencyService idempotencyService,
+            EntitlementService entitlementService,
             PlatformTransactionManager transactionManager
     ) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
@@ -71,6 +73,10 @@ public class SalesOrderService {
         this.idempotencyService = Objects.requireNonNull(
                 idempotencyService,
                 "idempotencyService must not be null"
+        );
+        this.entitlementService = Objects.requireNonNull(
+                entitlementService,
+                "entitlementService must not be null"
         );
         this.transactionTemplate = new TransactionTemplate(
                 Objects.requireNonNull(transactionManager, "transactionManager must not be null")
@@ -136,6 +142,7 @@ public class SalesOrderService {
                             "渠道交易号已被其他订单使用"
                     );
                 }
+                entitlementService.applyPaidOrder(order.id());
                 return loadOrder(normalizedPublicId, false);
             }
             ensureTransition(order.status(), "PAID");
@@ -179,6 +186,7 @@ public class SalesOrderService {
                     )),
                     traceId
             );
+            entitlementService.applyPaidOrder(order.id());
             return loadOrder(normalizedPublicId, false);
         }), "paySimulated must return an order");
     }

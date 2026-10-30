@@ -1,25 +1,26 @@
 package com.smartelder.platform.core.enterprise;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.common.ErrorCode;
 import com.smartelder.platform.core.common.PlatformApiException;
 import com.smartelder.platform.core.common.PlatformClock;
 import com.smartelder.platform.core.common.PublicIds;
+import com.smartelder.platform.licensing.LicenseCanonicalizer;
+import com.smartelder.platform.licensing.LicenseDocument;
+import com.smartelder.platform.licensing.LicenseSignature;
 import com.smartelder.platform.licensing.LicenseSigner;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class LicenseSigningService {
 
     private static final int SCHEMA_VERSION = 1;
+    private static final int OFFLINE_GRACE_DAYS = 7;
 
     private final JdbcClient jdbcClient;
-    private final ObjectMapper objectMapper;
     private final LicenseSigner licenseSigner;
     private final PlatformClock clock;
 
@@ -30,7 +31,7 @@ public class LicenseSigningService {
             PlatformClock clock
     ) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
-        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.licenseSigner = Objects.requireNonNull(licenseSigner, "licenseSigner must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
@@ -45,34 +46,28 @@ public class LicenseSigningService {
             String fingerprint
     ) {
         Instant now = clock.now();
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("schemaVersion", SCHEMA_VERSION);
-        payload.put("enterpriseId", enterprisePublicId);
-        payload.put("instanceId", instancePublicId);
-        payload.put("installationId", installationId);
-        payload.put("tenantDatabaseId", tenantDatabaseId);
-        payload.put("fingerprint", fingerprint);
-        payload.put("licenseVersion", 1);
-        payload.put("status", "ACTIVE");
-        payload.put("issuedAt", now.toString());
-        payload.put("modules", java.util.List.of());
-        payload.put("notBefore", now.toString());
-        payload.put("expiresAt", null);
-        String payloadJson;
+        String orgNo = jdbcClient.sql("SELECT org_no FROM pf_enterprise WHERE id = :id")
+                .param("id", enterpriseId)
+                .query(String.class)
+                .single();
+        String publicId = PublicIds.newId("lic");
+        LicenseDocument unsigned = new LicenseDocument(
+                SCHEMA_VERSION,
+                publicId,
+                orgNo,
+                instancePublicId,
+                fingerprint,
+                now,
+                now,
+                null,
+                OFFLINE_GRACE_DAYS,
+                new LicenseDocument.HeartbeatPolicy(6, 30),
+                List.of(),
+                new LicenseSignature(licenseSigner.algorithm(), licenseSigner.keyId(), null)
+        );
+        LicenseDocument signed;
         try {
-            payloadJson = objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException exception) {
-            throw new PlatformApiException(
-                    ErrorCode.INTERNAL_ERROR,
-                    "生成授权内容失败",
-                    exception
-            );
-        }
-        String signature;
-        try {
-            signature = licenseSigner.sign(payloadJson);
-        } catch (PlatformApiException exception) {
-            throw exception;
+            signed = licenseSigner.sign(unsigned);
         } catch (RuntimeException exception) {
             throw new PlatformApiException(
                     ErrorCode.DEPENDENCY_UNAVAILABLE,
@@ -80,7 +75,7 @@ public class LicenseSigningService {
                     exception
             );
         }
-        String publicId = PublicIds.newId("lic");
+        String payloadJson = LicenseCanonicalizer.canonicalize(unsigned);
         jdbcClient.sql("""
                         INSERT INTO pf_license(
                             public_id, enterprise_id, instance_id, version, schema_version,
@@ -95,15 +90,23 @@ public class LicenseSigningService {
                 .param("instanceId", instanceId)
                 .param("schemaVersion", SCHEMA_VERSION)
                 .param("payloadJson", payloadJson)
-                .param("signature", signature)
+                .param("signature", signed.signature().value())
                 .param("issuedAt", Timestamp.from(now))
+                .update();
+        jdbcClient.sql("""
+                        UPDATE pf_deployment_instance
+                        SET license_version = 1, updated_at = :updatedAt, version = version + 1
+                        WHERE id = :instanceId
+                        """)
+                .param("updatedAt", Timestamp.from(now))
+                .param("instanceId", instanceId)
                 .update();
         return new SignedLicense(
                 publicId,
                 1,
                 SCHEMA_VERSION,
                 payloadJson,
-                signature,
+                signed.signature().value(),
                 licenseSigner.algorithm(),
                 licenseSigner.keyId(),
                 now

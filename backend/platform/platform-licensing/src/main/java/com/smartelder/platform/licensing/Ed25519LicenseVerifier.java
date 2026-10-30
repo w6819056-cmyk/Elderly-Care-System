@@ -7,9 +7,24 @@ import java.security.Signature;
 import java.util.Base64;
 import java.util.Objects;
 
-public final class Ed25519LicenseVerifier {
+public final class Ed25519LicenseVerifier implements LicenseVerifier {
 
-    private Ed25519LicenseVerifier() {
+    private final String trustedKeyId;
+    private final PublicKey publicKey;
+
+    public Ed25519LicenseVerifier(PublicKey publicKey) {
+        this(null, publicKey);
+    }
+
+    public Ed25519LicenseVerifier(String trustedKeyId, PublicKey publicKey) {
+        if (trustedKeyId != null && trustedKeyId.isBlank()) {
+            throw new IllegalArgumentException("trustedKeyId must not be blank");
+        }
+        this.trustedKeyId = trustedKeyId;
+        this.publicKey = Objects.requireNonNull(publicKey, "publicKey must not be null");
+        if (!isEd25519KeyAlgorithm(publicKey.getAlgorithm())) {
+            throw new IllegalArgumentException("publicKey must be Ed25519");
+        }
     }
 
     public static PublicKey publicKeyFromPem(String publicKeyPem) {
@@ -49,8 +64,27 @@ public final class Ed25519LicenseVerifier {
         }
     }
 
+    @Override
+    public boolean verify(LicenseDocument document) {
+        if (document == null || document.signature() == null || document.signature().value() == null) {
+            return false;
+        }
+        LicenseSignature signature = document.signature();
+        if (!"Ed25519".equalsIgnoreCase(signature.algorithm())) {
+            return false;
+        }
+        if (trustedKeyId != null && !trustedKeyId.equals(signature.keyId())) {
+            return false;
+        }
+        try {
+            String payload = LicenseCanonicalizer.canonicalize(document);
+            return verify(payload, signature.value(), publicKey);
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
     private static boolean isEd25519KeyAlgorithm(String algorithm) {
         return "Ed25519".equalsIgnoreCase(algorithm) || "EdDSA".equalsIgnoreCase(algorithm);
     }
 }
-

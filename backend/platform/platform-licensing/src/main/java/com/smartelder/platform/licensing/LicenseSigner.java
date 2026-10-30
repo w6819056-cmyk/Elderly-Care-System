@@ -6,5 +6,5 @@ public interface LicenseSigner {
 
     String keyId();
 
-    String sign(String payload);
+    LicenseDocument sign(LicenseDocument document);
 }
