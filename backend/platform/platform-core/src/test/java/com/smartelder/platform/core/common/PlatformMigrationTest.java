@@ -23,7 +23,11 @@ class PlatformMigrationTest {
                     .query(String.class)
                     .list();
 
-            assertThat(tableCount).isEqualTo(25L);
+            assertThat(tableCount).isEqualTo(26L);
+            assertThat(database.jdbcClient().sql("""
+                            SELECT COUNT(*) FROM information_schema.tables
+                            WHERE table_schema = 'public' AND table_name = 'pf_instance_nonce'
+                            """).query(Long.class).single()).isEqualTo(1L);
             assertThat(permissions).contains(
                     "platform.account.manage",
                     "platform.enterprise.manage",

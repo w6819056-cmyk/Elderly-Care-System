@@ -8,6 +8,13 @@ import com.smartelder.platform.core.auth.PlatformTokenService;
 import com.smartelder.platform.core.common.IdempotencyService;
 import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
+import com.smartelder.platform.core.enterprise.ActivationService;
+import com.smartelder.platform.core.enterprise.EnterpriseService;
+import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
+import com.smartelder.platform.core.enterprise.InstanceService;
+import com.smartelder.platform.core.enterprise.LicenseSigningService;
+import com.smartelder.platform.licensing.Ed25519LicenseSigner;
+import com.smartelder.platform.licensing.LicenseSigner;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -89,6 +96,78 @@ public class PlatformCoreConfiguration {
                 tokenService,
                 auditService,
                 clock
+        );
+    }
+
+    @Bean
+    LicenseSigner platformLicenseSigner(
+            @Value("${platform.license.key-id:platform-license-v1}") String keyId,
+            @Value("${platform.license.signing-private-key}") String privateKeyPem
+    ) {
+        return Ed25519LicenseSigner.fromPem(
+                keyId,
+                privateKeyPem.replace("\\n", "\n")
+        );
+    }
+
+    @Bean
+    EnterpriseService platformEnterpriseService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService
+    ) {
+        return new EnterpriseService(jdbcClient, clock, auditService);
+    }
+
+    @Bean
+    LicenseSigningService platformLicenseSigningService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            LicenseSigner licenseSigner,
+            PlatformClock clock
+    ) {
+        return new LicenseSigningService(jdbcClient, objectMapper, licenseSigner, clock);
+    }
+
+    @Bean
+    ActivationService platformActivationService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            EnterpriseService enterpriseService,
+            LicenseSigningService licenseSigningService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ActivationService(
+                jdbcClient,
+                clock,
+                auditService,
+                enterpriseService,
+                licenseSigningService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    InstanceRequestVerifier platformInstanceRequestVerifier(
+            JdbcClient jdbcClient,
+            PlatformClock clock
+    ) {
+        return new InstanceRequestVerifier(jdbcClient, clock);
+    }
+
+    @Bean
+    InstanceService platformInstanceService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            EnterpriseService enterpriseService,
+            LicenseSigningService licenseSigningService
+    ) {
+        return new InstanceService(
+                jdbcClient,
+                clock,
+                enterpriseService,
+                licenseSigningService
         );
     }
 }

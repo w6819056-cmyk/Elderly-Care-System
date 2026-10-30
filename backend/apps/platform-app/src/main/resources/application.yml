@@ -25,6 +25,9 @@ platform:
   bootstrap:
     admin-username: "${PLATFORM_BOOTSTRAP_ADMIN_USERNAME:admin}"
     admin-password: "${PLATFORM_BOOTSTRAP_ADMIN_PASSWORD:ChangeMe-Platform-2026}"
+  license:
+    key-id: "${PLATFORM_LICENSE_KEY_ID:platform-license-v1}"
+    signing-private-key: "${PLATFORM_LICENSE_SIGNING_PRIVATE_KEY}"
 
 logging:
   level:

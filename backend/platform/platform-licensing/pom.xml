@@ -12,4 +12,11 @@
     <artifactId>platform-licensing</artifactId>
     <name>platform-licensing</name>
     <description>Platform licensing implementation</description>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>

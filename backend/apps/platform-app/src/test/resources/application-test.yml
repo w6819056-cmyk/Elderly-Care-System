@@ -17,3 +17,9 @@ platform:
   bootstrap:
     admin-username: admin
     admin-password: ChangeMe-Platform-2026
+  license:
+    key-id: platform-license-test-v1
+    signing-private-key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEII8rvVkBUuZpXN8jYNu88hnZPJp7gDQHyff+uBksYcoO
+      -----END PRIVATE KEY-----
