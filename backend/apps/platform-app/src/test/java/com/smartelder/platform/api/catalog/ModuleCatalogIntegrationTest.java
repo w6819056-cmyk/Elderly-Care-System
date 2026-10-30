@@ -138,7 +138,7 @@ class ModuleCatalogIntegrationTest {
                 .andExpect(jsonPath("$.code").value("MODULE_DEPENDENCY_INVALID"));
 
         replaceDependencies(token, codeA, """
-                [{"moduleCode":"missing_%s","type":"REQUIRED","minimumVersion":"1.0.0"}]
+                [{"moduleCode":"missing-%s","type":"REQUIRED","minimumVersion":"1.0.0"}]
                 """.formatted(UUID.randomUUID().toString().substring(0, 6)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("MODULE_DEPENDENCY_INVALID"));
@@ -300,6 +300,25 @@ class ModuleCatalogIntegrationTest {
                 .andExpect(jsonPath("$.data.prices.length()").value(1))
                 .andExpect(jsonPath("$.data.prices[0].amount").value("88.00"));
     }
+    @Test
+    void rejectsUnderscoreModuleCodeAndAcceptsHyphenatedCode() throws Exception {
+        String token = login();
+
+        mvc.perform(post("/api/platform/v1/modules")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(moduleBody(
+                                "invalid_module_" + UUID.randomUUID().toString().substring(0, 8),
+                                "非法模块编码",
+                                901,
+                                false
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        createModule(token, code("valid-hyphen"), "合法连字符模块", 902, false);
+    }
+
     private void createModule(
             String token,
             String code,
@@ -391,7 +410,7 @@ class ModuleCatalogIntegrationTest {
     }
 
     private static String code(String prefix) {
-        return prefix + "_" + UUID.randomUUID().toString().substring(0, 8);
+        return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
 
     private static String bearer(String token) {

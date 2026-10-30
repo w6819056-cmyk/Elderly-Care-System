@@ -208,10 +208,10 @@ public class ModuleCatalogController {
 
     public record CreateModuleRequest(
             @NotBlank
-            @Size(max = 40)
+            @Size(min = 2, max = 32)
             @Pattern(
-                    regexp = "^[a-z][a-z0-9_]*$",
-                    message = "必须以小写字母开头，且只能包含小写字母、数字和下划线"
+                    regexp = "^[a-z][a-z0-9-]{1,31}$",
+                    message = "必须以小写字母开头，且只能包含小写字母、数字和连字符，长度 2～32"
             )
             String code,
             @NotBlank @Size(max = 100) String name,
@@ -224,7 +224,13 @@ public class ModuleCatalogController {
     }
 
     public record DependencyRequest(
-            @NotBlank @Size(max = 40) String moduleCode,
+            @NotBlank
+            @Size(min = 2, max = 32)
+            @Pattern(
+                    regexp = "^[a-z][a-z0-9-]{1,31}$",
+                    message = "必须以小写字母开头，且只能包含小写字母、数字和连字符，长度 2～32"
+            )
+            String moduleCode,
             @NotBlank
             @Pattern(regexp = "REQUIRED|OPTIONAL", message = "必须为 REQUIRED 或 OPTIONAL")
             String type,

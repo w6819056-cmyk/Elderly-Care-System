@@ -10,6 +10,9 @@ import com.smartelder.platform.core.catalog.ModuleVersionService;
 import com.smartelder.platform.core.common.IdempotencyService;
 import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
+import com.smartelder.platform.core.commerce.OrderQuoteService;
+import com.smartelder.platform.core.commerce.PlanService;
+import com.smartelder.platform.core.commerce.SalesOrderService;
 import com.smartelder.platform.core.enterprise.ActivationService;
 import com.smartelder.platform.core.enterprise.EnterpriseService;
 import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
@@ -201,6 +204,42 @@ public class PlatformCoreConfiguration {
                 clock,
                 auditService,
                 versionService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    OrderQuoteService platformOrderQuoteService(JdbcClient jdbcClient, PlatformClock clock) {
+        return new OrderQuoteService(jdbcClient, clock);
+    }
+
+    @Bean
+    PlanService platformPlanService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new PlanService(jdbcClient, clock, auditService, transactionManager);
+    }
+
+    @Bean
+    SalesOrderService platformSalesOrderService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            OrderQuoteService quoteService,
+            IdempotencyService idempotencyService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new SalesOrderService(
+                jdbcClient,
+                objectMapper,
+                clock,
+                auditService,
+                quoteService,
+                idempotencyService,
                 transactionManager
         );
     }

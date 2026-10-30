@@ -27,7 +27,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ModuleCatalogService {
 
     private static final int MAX_PAGE_SIZE = 100;
-    private static final Pattern MODULE_CODE = Pattern.compile("^[a-z][a-z0-9_]{0,39}$");
+    private static final Pattern MODULE_CODE = Pattern.compile("^[a-z][a-z0-9-]{1,31}$");
     private static final Pattern CURRENCY = Pattern.compile("^[A-Z]{3}$");
     private static final Pattern AMOUNT = Pattern.compile("^(0|[1-9]\\d{0,9})(\\.\\d{1,2})?$");
     private static final Map<String, Set<String>> SALE_STATUS_TRANSITIONS = Map.of(
@@ -680,7 +680,7 @@ public class ModuleCatalogService {
         if (!MODULE_CODE.matcher(normalized).matches()) {
             throw new PlatformApiException(
                     ErrorCode.INVALID_REQUEST,
-                    "模块编码必须以小写字母开头，且只能包含小写字母、数字和下划线，最长 40 个字符"
+                    "模块编码必须以小写字母开头，且只能包含小写字母、数字和连字符，长度 2～32"
             );
         }
         return normalized;
