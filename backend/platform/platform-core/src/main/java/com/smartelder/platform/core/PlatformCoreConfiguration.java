@@ -5,6 +5,8 @@ import com.smartelder.platform.core.auth.PlatformAdminRepository;
 import com.smartelder.platform.core.auth.PlatformAdminService;
 import com.smartelder.platform.core.auth.PlatformAuthService;
 import com.smartelder.platform.core.auth.PlatformTokenService;
+import com.smartelder.platform.core.catalog.ModuleCatalogService;
+import com.smartelder.platform.core.catalog.ModuleVersionService;
 import com.smartelder.platform.core.common.IdempotencyService;
 import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
@@ -168,6 +170,38 @@ public class PlatformCoreConfiguration {
                 clock,
                 enterpriseService,
                 licenseSigningService
+        );
+    }
+
+    @Bean
+    ModuleVersionService platformModuleVersionService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ModuleVersionService(
+                jdbcClient,
+                clock,
+                auditService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    ModuleCatalogService platformModuleCatalogService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            ModuleVersionService versionService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ModuleCatalogService(
+                jdbcClient,
+                clock,
+                auditService,
+                versionService,
+                transactionManager
         );
     }
 }
