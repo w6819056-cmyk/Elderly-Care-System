@@ -6,7 +6,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-final class PlatformTestDatabase implements AutoCloseable {
+public final class PlatformTestDatabase implements AutoCloseable {
 
     private final DriverManagerDataSource dataSource;
     private final JdbcClient jdbcClient;
@@ -32,15 +32,15 @@ final class PlatformTestDatabase implements AutoCloseable {
         transactionManager = new DataSourceTransactionManager(dataSource);
     }
 
-    static PlatformTestDatabase create(String prefix) {
+    public static PlatformTestDatabase create(String prefix) {
         return new PlatformTestDatabase(prefix + "_" + UUID.randomUUID().toString().replace("-", ""));
     }
 
-    JdbcClient jdbcClient() {
+    public JdbcClient jdbcClient() {
         return jdbcClient;
     }
 
-    DataSourceTransactionManager transactionManager() {
+    public DataSourceTransactionManager transactionManager() {
         return transactionManager;
     }
 

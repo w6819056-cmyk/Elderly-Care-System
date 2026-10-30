@@ -4,6 +4,7 @@ public enum ErrorCode {
     OK("OK", "成功", 200),
     INVALID_REQUEST("INVALID_REQUEST", "请求参数错误", 400),
     UNAUTHORIZED("UNAUTHORIZED", "未登录或登录已失效", 401),
+    TOKEN_INVALID("TOKEN_INVALID", "登录凭证无效", 401),
     FORBIDDEN("FORBIDDEN", "无权执行该操作", 403),
     NOT_FOUND("NOT_FOUND", "资源不存在", 404),
     CONFLICT("CONFLICT", "数据已被其他操作修改", 409),

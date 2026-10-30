@@ -1,5 +1,6 @@
 server:
-  port: 8081
+  port: ${PLATFORM_PORT:8081}
+  shutdown: graceful
 
 spring:
   application:
@@ -16,6 +17,14 @@ spring:
     locations: classpath:db/migration/platform
     encoding: UTF-8
     validate-on-migrate: true
+
+platform:
+  jwt:
+    secret: "${PLATFORM_JWT_SECRET}"
+    ttl-hours: ${PLATFORM_JWT_TTL_HOURS:8}
+  bootstrap:
+    admin-username: "${PLATFORM_BOOTSTRAP_ADMIN_USERNAME:admin}"
+    admin-password: "${PLATFORM_BOOTSTRAP_ADMIN_PASSWORD:ChangeMe-Platform-2026}"
 
 logging:
   level:

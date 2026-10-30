@@ -10,3 +10,10 @@ spring:
     encoding: UTF-8
 server:
   port: 0
+platform:
+  jwt:
+    secret: platform-test-secret-at-least-32-bytes-long
+    ttl-hours: 8
+  bootstrap:
+    admin-username: admin
+    admin-password: ChangeMe-Platform-2026
