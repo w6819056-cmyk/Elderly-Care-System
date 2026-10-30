@@ -7,6 +7,8 @@ import com.smartelder.platform.api.CachedBodyRequestFilter;
 import com.smartelder.platform.core.common.PlatformApiException;
 import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
 import com.smartelder.platform.core.enterprise.InstanceService;
+import com.smartelder.platform.core.enterprise.HeartbeatService;
+import com.smartelder.platform.core.enterprise.LicenseRefreshService;
 import com.smartelder.platform.core.enterprise.LicenseSigningService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,15 +34,21 @@ public class InstanceController {
 
     private final InstanceRequestVerifier requestVerifier;
     private final InstanceService instanceService;
+    private final HeartbeatService heartbeatService;
+    private final LicenseRefreshService licenseRefreshService;
     private final Clock clock;
 
     public InstanceController(
             InstanceRequestVerifier requestVerifier,
             InstanceService instanceService,
+            HeartbeatService heartbeatService,
+            LicenseRefreshService licenseRefreshService,
             Clock clock
     ) {
         this.requestVerifier = requestVerifier;
         this.instanceService = instanceService;
+        this.heartbeatService = heartbeatService;
+        this.licenseRefreshService = licenseRefreshService;
         this.clock = clock;
     }
 
@@ -58,7 +66,7 @@ public class InstanceController {
     }
 
     @PostMapping("/heartbeat")
-    public ApiResponse<InstanceService.HeartbeatResult> heartbeat(
+    public ApiResponse<HeartbeatService.HeartbeatResult> heartbeat(
             @RequestHeader(value = "X-Instance-Id", required = false) String instanceId,
             @RequestHeader(value = "X-Instance-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-Instance-Nonce", required = false) String nonce,
@@ -71,14 +79,41 @@ public class InstanceController {
                 verificationInput(instanceId, timestamp, nonce, signature, request)
         );
         return ApiResponse.success(
-                instanceService.heartbeat(
+                heartbeatService.heartbeat(
                         instance,
-                        new InstanceService.HeartbeatCommand(
+                        new HeartbeatService.HeartbeatCommand(
                                 body.licenseVersion(),
                                 body.clientTime()
                         ),
                         request.getRemoteAddr()
                 ),
+                traceId,
+                clock
+        );
+    }
+
+    @PostMapping("/{publicId}/ack-license")
+    public ApiResponse<LicenseRefreshService.Acknowledgement> acknowledgeLicense(
+            @PathVariable String publicId,
+            @RequestHeader(value = "X-Instance-Id", required = false) String instanceId,
+            @RequestHeader(value = "X-Instance-Timestamp", required = false) String timestamp,
+            @RequestHeader(value = "X-Instance-Nonce", required = false) String nonce,
+            @RequestHeader(value = "X-Instance-Signature", required = false) String signature,
+            @Valid @RequestBody LicenseAcknowledgementRequest body,
+            HttpServletRequest request,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        InstanceRequestVerifier.VerifiedInstance instance = requestVerifier.verify(
+                verificationInput(instanceId, timestamp, nonce, signature, request)
+        );
+        if (!instance.publicId().equals(publicId)) {
+            throw new PlatformApiException(
+                    ErrorCode.INSTANCE_SIGNATURE_INVALID,
+                    "实例签名与目标实例不匹配"
+            );
+        }
+        return ApiResponse.success(
+                licenseRefreshService.acknowledge(instance, body.version()),
                 traceId,
                 clock
         );
@@ -104,7 +139,7 @@ public class InstanceController {
             );
         }
         return ApiResponse.success(
-                instanceService.currentLicense(instance),
+                licenseRefreshService.current(instance),
                 traceId,
                 clock
         );
@@ -134,5 +169,8 @@ public class InstanceController {
             @Min(0) long licenseVersion,
             @NotNull Instant clientTime
     ) {
+    }
+
+    public record LicenseAcknowledgementRequest(@Min(1) long version) {
     }
 }

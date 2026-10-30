@@ -677,25 +677,25 @@ git commit -m "feat(platform): sign licenses and apply entitlements"
 - Produces: `GET /api/platform/v1/instances/{publicId}/license` returning the latest signed license.
 - Produces: `POST /api/platform/v1/instances/{publicId}/ack-license` body `{"version":2}` updating `acknowledged_at` idempotently.
 
-- [ ] **Step 1: Write failing heartbeat tests**
+- [x] **Step 1: Write failing heartbeat tests**
 
 Prove a valid heartbeat records `pf_heartbeat`, returns platform time and returns the same license version twice without issuing duplicate licenses. Prove an enterprise suspension marks the instance suspended and returns HTTP 409 `ENTERPRISE_SUSPENDED`; a valid heartbeat after reactivation succeeds. Prove license acknowledgement is idempotent.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `mvn -f backend/pom.xml -pl apps/platform-app -am test -Dtest=HeartbeatLicenseIntegrationTest`
 Expected: missing endpoint or missing service failure.
 
-- [ ] **Step 3: Implement heartbeat and compensation**
+- [x] **Step 3: Implement heartbeat and compensation**
 
 Heartbeat verifies instance signature, updates last heartbeat, computes license state at platform time, records a heartbeat row, and returns the latest license. If the enterprise is suspended/closed or instance revoked, return a stable error and do not issue new rights. Do not delete historical heartbeat or license rows. Write `license.refresh.requested` to outbox when rights change. Expose `POST /api/platform/v1/orders/{publicId}/retry-fulfillment`; it is idempotent and moves to `MANUAL_REVIEW` after five failed attempts.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `mvn -f backend/pom.xml -pl apps/platform-app -am test -Dtest=HeartbeatLicenseIntegrationTest`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/platform/platform-core/src backend/apps/platform-app/src

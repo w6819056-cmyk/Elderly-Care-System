@@ -10,6 +10,7 @@ import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.Clock;
 import java.util.Collection;
 import java.util.Date;
 import java.util.LinkedHashSet;
@@ -25,13 +26,19 @@ public class PlatformTokenService {
 
     private final SecretKey key;
     private final Duration ttl;
+    private final Clock clock;
 
     public PlatformTokenService(String secret, Duration ttl) {
+        this(secret, ttl, Clock.systemUTC());
+    }
+
+    public PlatformTokenService(String secret, Duration ttl, Clock clock) {
         if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
             throw new IllegalArgumentException("platform JWT secret must contain at least 32 bytes");
         }
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.ttl = Objects.requireNonNull(ttl, "ttl must not be null");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
         if (ttl.isNegative() || ttl.isZero()) {
             throw new IllegalArgumentException("platform JWT ttl must be positive");
         }
@@ -64,6 +71,7 @@ public class PlatformTokenService {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)
+                    .clock(() -> Date.from(clock.instant()))
                     .requireIssuer(ISSUER)
                     .requireAudience(AUDIENCE)
                     .build()

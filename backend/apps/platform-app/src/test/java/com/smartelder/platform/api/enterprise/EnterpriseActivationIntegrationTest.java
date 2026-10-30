@@ -262,7 +262,7 @@ class EnterpriseActivationIntegrationTest {
                                 ),
                                 "fingerprint", "fingerprint-suspended"
                         ))))
-                .andExpect(status().isForbidden())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ENTERPRISE_SUSPENDED"));
 
         mvc.perform(patch("/api/platform/v1/enterprises/{publicId}/status", enterprise.publicId())

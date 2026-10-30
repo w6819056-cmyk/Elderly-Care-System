@@ -42,7 +42,30 @@ public class EntitlementService {
     }
 
     public void applyPaidOrder(long orderId) {
-        transactionTemplate.executeWithoutResult(status -> applyInTransaction(orderId));
+        transactionTemplate.executeWithoutResult(status -> applyPaidOrderInTransaction(orderId));
+    }
+
+    public void retryFulfillment(long orderId, String traceId) {
+        RetryAttempt attempt = Objects.requireNonNull(transactionTemplate.execute(status ->
+                beginRetry(orderId)
+        ), "retry attempt must return a result");
+        if (attempt.alreadyFulfilled()) {
+            return;
+        }
+        try {
+            transactionTemplate.executeWithoutResult(status ->
+                    fulfillInTransaction(orderId, false, traceId)
+            );
+        } catch (RuntimeException failure) {
+            recordRetryFailure(orderId, attempt.number(), failure);
+            throw new PlatformApiException(
+                    ErrorCode.ORDER_FULFILLMENT_FAILED,
+                    attempt.number() >= 5
+                            ? "订单履约连续失败，已转人工复核"
+                            : "订单履约失败，请稍后重试",
+                    failure
+            );
+        }
     }
 
     public static String deriveStatus(Entitlement entitlement, Instant now) {
@@ -76,7 +99,7 @@ public class EntitlementService {
         return formal && "ACTIVE".equals(deriveStatus(entitlement, now));
     }
 
-    private void applyInTransaction(long orderId) {
+    private void applyPaidOrderInTransaction(long orderId) {
         OrderRow order = lockOrder(orderId);
         if ("FULFILLED".equals(order.status())) {
             return;
@@ -102,6 +125,18 @@ public class EntitlementService {
             throw stateConflict(order.status(), "FULFILLING");
         }
 
+        fulfillInTransaction(orderId, true, "order:" + orderId);
+    }
+
+    private void fulfillInTransaction(long orderId, boolean issueLicense, String traceId) {
+        OrderRow order = lockOrder(orderId);
+        if ("FULFILLED".equals(order.status())) {
+            return;
+        }
+        if (!"FULFILLING".equals(order.status())) {
+            throw stateConflict(order.status(), "FULFILLED");
+        }
+        Instant now = clock.now();
         boolean entitlementChanged = false;
         for (OrderItem item : loadItems(orderId)) {
             if (!"PENDING".equals(item.entitlementResult())) {
@@ -109,8 +144,6 @@ public class EntitlementService {
             }
             entitlementChanged |= applyItem(order.enterpriseId(), orderId, item, now);
         }
-
-        validateRequiredDependencies(order.enterpriseId(), orderId, now);
 
         if (entitlementChanged) {
             List<Long> instanceIds = jdbcClient.sql("""
@@ -122,9 +155,15 @@ public class EntitlementService {
                     .query(Long.class)
                     .list();
             for (Long instanceId : instanceIds) {
-                licenseIssueService.issueForInstance(instanceId, "order:" + orderId);
+                if (issueLicense) {
+                    licenseIssueService.issueForInstance(instanceId, traceId);
+                } else {
+                    licenseIssueService.requestRefreshForInstance(instanceId, traceId);
+                }
             }
         }
+
+        validateRequiredDependencies(order.enterpriseId(), orderId, now);
 
         int fulfilled = jdbcClient.sql("""
                         UPDATE pf_subscription_order
@@ -139,6 +178,64 @@ public class EntitlementService {
         if (fulfilled != 1) {
             throw stateConflict("FULFILLING", "FULFILLED");
         }
+    }
+
+    private RetryAttempt beginRetry(long orderId) {
+        OrderRow order = lockOrder(orderId);
+        if ("FULFILLED".equals(order.status())) {
+            return new RetryAttempt(true, 0);
+        }
+        if (!"FULFILLING".equals(order.status())) {
+            throw stateConflict(order.status(), "FULFILLING");
+        }
+        int attempts = jdbcClient.sql("""
+                        UPDATE pf_subscription_order
+                        SET fulfillment_attempts = fulfillment_attempts + 1,
+                            last_fulfillment_error = NULL,
+                            updated_at = :updatedAt,
+                            version = version + 1
+                        WHERE id = :orderId AND status = 'FULFILLING'
+                        """)
+                .param("updatedAt", Timestamp.from(clock.now()))
+                .param("orderId", orderId)
+                .update();
+        if (attempts != 1) {
+            throw stateConflict(order.status(), "FULFILLING");
+        }
+        int number = jdbcClient.sql(
+                        "SELECT fulfillment_attempts FROM pf_subscription_order WHERE id = :orderId")
+                .param("orderId", orderId)
+                .query(Integer.class)
+                .single();
+        return new RetryAttempt(false, number);
+    }
+
+    private void recordRetryFailure(long orderId, int attempt, RuntimeException failure) {
+        String message = failure.getMessage() == null ? failure.getClass().getSimpleName()
+                : failure.getMessage();
+        if (message.length() > 500) {
+            message = message.substring(0, 500);
+        }
+        String error = message;
+        transactionTemplate.executeWithoutResult(status -> {
+            String targetStatus = attempt >= 5 ? "MANUAL_REVIEW" : "FULFILLING";
+            int updated = jdbcClient.sql("""
+                            UPDATE pf_subscription_order
+                            SET status = :status,
+                                last_fulfillment_error = :error,
+                                updated_at = :updatedAt,
+                                version = version + 1
+                            WHERE id = :orderId AND status = 'FULFILLING'
+                            """)
+                    .param("status", targetStatus)
+                    .param("error", error)
+                    .param("updatedAt", Timestamp.from(clock.now()))
+                    .param("orderId", orderId)
+                    .update();
+            if (updated != 1) {
+                throw new IllegalStateException("failed to record fulfillment failure");
+            }
+        });
     }
 
     private boolean applyItem(long enterpriseId, long orderId, OrderItem item, Instant now) {
@@ -216,7 +313,9 @@ public class EntitlementService {
     private void validateRequiredDependencies(long enterpriseId, long orderId, Instant now) {
         jdbcClient.sql("""
                         SELECT ordered.module_code, dependency.code AS dependency_code,
-                               e.license_type, e.status, e.starts_at, e.expires_at, e.perpetual
+                               e.license_type, e.status, e.starts_at, e.expires_at, e.perpetual,
+                               purchased.id AS purchased_dependency_id,
+                               purchased.entitlement_result AS purchased_dependency_result
                         FROM pf_subscription_order_item ordered
                         JOIN pf_module_dependency d
                           ON d.module_id = ordered.module_id AND d.dependency_type = 'REQUIRED'
@@ -224,6 +323,9 @@ public class EntitlementService {
                         LEFT JOIN pf_entitlement e
                           ON e.enterprise_id = :enterpriseId
                          AND e.module_id = d.dependency_module_id
+                        LEFT JOIN pf_subscription_order_item purchased
+                          ON purchased.order_id = :orderId
+                         AND purchased.module_id = d.dependency_module_id
                         WHERE ordered.order_id = :orderId
                         ORDER BY ordered.id, d.id
                         """)
@@ -232,16 +334,19 @@ public class EntitlementService {
                 .query((rs, rowNum) -> new DependencyState(
                         rs.getString("module_code"),
                         rs.getString("dependency_code"),
-                        dependencyEntitlement(rs)
+                        dependencyEntitlement(rs),
+                        rs.getLong("purchased_dependency_id") > 0
+                                && "APPLIED".equals(rs.getString("purchased_dependency_result"))
                 ))
                 .list()
                 .forEach(dependency -> {
-                    if (dependency.entitlement() == null
-                            || !satisfiesDependency(dependency.entitlement(), now)) {
+                    if ((!dependency.purchasedInOrder())
+                            && (dependency.entitlement() == null
+                                || !satisfiesDependency(dependency.entitlement(), now))) {
                         throw new PlatformApiException(
                                 ErrorCode.MODULE_DEPENDENCY_MISSING,
                                 "模块 " + dependency.moduleCode()
-                                        + " 缺少有效正式授权的依赖模块 "
+                                + " 缺少正式授权的依赖模块 "
                                         + dependency.dependencyCode()
                         );
                     }
@@ -255,7 +360,7 @@ public class EntitlementService {
         }
         Timestamp startsAt = rs.getTimestamp("starts_at");
         Timestamp expiresAt = rs.getTimestamp("expires_at");
-        return new Entitlement(
+        Entitlement entitlement = new Entitlement(
                 0,
                 0,
                 0,
@@ -267,6 +372,7 @@ public class EntitlementService {
                 0,
                 false
         );
+        return entitlement;
     }
 
     private OrderRow lockOrder(long orderId) {
@@ -384,6 +490,9 @@ public class EntitlementService {
     private record OrderRow(long id, long enterpriseId, String status) {
     }
 
+    private record RetryAttempt(boolean alreadyFulfilled, int number) {
+    }
+
     private record OrderItem(
             long id,
             long moduleId,
@@ -409,7 +518,8 @@ public class EntitlementService {
     private record DependencyState(
             String moduleCode,
             String dependencyCode,
-            Entitlement entitlement
+            Entitlement entitlement,
+            boolean purchasedInOrder
     ) {
     }
 }

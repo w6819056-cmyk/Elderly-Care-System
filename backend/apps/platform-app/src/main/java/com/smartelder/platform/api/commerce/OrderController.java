@@ -109,6 +109,20 @@ public class OrderController {
         return ApiResponse.success(order, traceId, clock);
     }
 
+    @PostMapping("/{publicId}/retry-fulfillment")
+    @PreAuthorize("hasAuthority('platform.order.manage')")
+    public ApiResponse<SalesOrderService.OrderView> retryFulfillment(
+            @PathVariable String publicId,
+            @AuthenticationPrincipal PlatformPrincipal principal,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        return ApiResponse.success(
+                orderService.retryFulfillment(publicId, principal, traceId),
+                traceId,
+                clock
+        );
+    }
+
     @PostMapping("/{publicId}/refund")
     @PreAuthorize("hasAuthority('platform.order.manage')")
     public ApiResponse<SalesOrderService.OrderView> refund(

@@ -19,6 +19,8 @@ import com.smartelder.platform.core.enterprise.ActivationService;
 import com.smartelder.platform.core.enterprise.EnterpriseService;
 import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
 import com.smartelder.platform.core.enterprise.InstanceService;
+import com.smartelder.platform.core.enterprise.HeartbeatService;
+import com.smartelder.platform.core.enterprise.LicenseRefreshService;
 import com.smartelder.platform.core.enterprise.LicenseSigningService;
 import com.smartelder.platform.licensing.Ed25519LicenseSigner;
 import com.smartelder.platform.licensing.LicenseSigner;
@@ -68,9 +70,10 @@ public class PlatformCoreConfiguration {
     @Bean
     PlatformTokenService platformTokenService(
             @Value("${platform.jwt.secret}") String secret,
-            @Value("${platform.jwt.ttl-hours:8}") long ttlHours
+            @Value("${platform.jwt.ttl-hours:8}") long ttlHours,
+            Clock clock
     ) {
-        return new PlatformTokenService(secret, Duration.ofHours(ttlHours));
+        return new PlatformTokenService(secret, Duration.ofHours(ttlHours), clock);
     }
 
     @Bean
@@ -208,6 +211,28 @@ public class PlatformCoreConfiguration {
                 enterpriseService,
                 licenseSigningService
         );
+    }
+
+    @Bean
+    HeartbeatService platformHeartbeatService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            LicenseSigningService licenseSigningService,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new HeartbeatService(
+                jdbcClient, clock, licenseSigningService, objectMapper, transactionManager
+        );
+    }
+
+    @Bean
+    LicenseRefreshService platformLicenseRefreshService(
+            JdbcClient jdbcClient,
+            LicenseSigningService licenseSigningService,
+            PlatformClock clock
+    ) {
+        return new LicenseRefreshService(jdbcClient, licenseSigningService, clock);
     }
 
     @Bean

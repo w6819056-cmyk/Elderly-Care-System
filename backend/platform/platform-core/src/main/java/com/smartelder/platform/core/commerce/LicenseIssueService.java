@@ -14,6 +14,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -26,6 +27,7 @@ public class LicenseIssueService {
             new LicenseDocument.HeartbeatPolicy(6, 30);
 
     private final JdbcClient jdbcClient;
+    private final ObjectMapper objectMapper;
     private final LicenseSigner licenseSigner;
     private final PlatformClock clock;
     private final TransactionTemplate transactionTemplate;
@@ -38,7 +40,7 @@ public class LicenseIssueService {
             PlatformTransactionManager transactionManager
     ) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
-        Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.licenseSigner = Objects.requireNonNull(licenseSigner, "licenseSigner must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.transactionTemplate = new TransactionTemplate(
@@ -112,12 +114,54 @@ public class LicenseIssueService {
             throw new IllegalStateException("部署实例授权版本已变化");
         }
 
+        writeRefreshRequested(instance.publicId(), nextVersion);
+
         return new IssuedLicense(
                 nextVersion,
                 payloadJson,
                 signed.signature().value(),
                 licenseId
         );
+    }
+
+    public void requestRefreshForInstance(long instanceId, String traceId) {
+        Objects.requireNonNull(traceId, "traceId must not be null");
+        transactionTemplate.executeWithoutResult(status -> {
+            InstanceRow instance = lockInstance(instanceId);
+            writeRefreshRequested(instance.publicId(), instance.licenseVersion());
+        });
+    }
+
+    private void writeRefreshRequested(String instancePublicId, long licenseVersion) {
+        String payload;
+        try {
+            payload = objectMapper.writeValueAsString(Map.of(
+                    "instancePublicId", instancePublicId,
+                    "licenseVersion", licenseVersion
+            ));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize license refresh event", exception);
+        }
+        jdbcClient.sql("""
+                        INSERT INTO pf_outbox_event(
+                            public_id, aggregate_type, aggregate_id, event_type,
+                            payload_json, status, created_at, published_at
+                        )
+                        SELECT :publicId, 'DEPLOYMENT_INSTANCE', :instancePublicId,
+                               'license.refresh.requested', :payload, 'PENDING', :createdAt, NULL
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM pf_outbox_event
+                            WHERE aggregate_type = 'DEPLOYMENT_INSTANCE'
+                              AND aggregate_id = :instancePublicId
+                              AND event_type = 'license.refresh.requested'
+                              AND status = 'PENDING'
+                        )
+                        """)
+                .param("publicId", PublicIds.newId("evt"))
+                .param("instancePublicId", instancePublicId)
+                .param("payload", payload)
+                .param("createdAt", Timestamp.from(clock.now()))
+                .update();
     }
 
     private InstanceRow lockInstance(long instanceId) {

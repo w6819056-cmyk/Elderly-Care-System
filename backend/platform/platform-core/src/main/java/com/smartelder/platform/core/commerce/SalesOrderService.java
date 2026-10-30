@@ -109,6 +109,37 @@ public class SalesOrderService {
         return loadOrder(requireText(publicId, "publicId", 64), false);
     }
 
+    public OrderView retryFulfillment(
+            String publicId,
+            PlatformPrincipal actor,
+            String traceId
+    ) {
+        Objects.requireNonNull(actor, "actor must not be null");
+        String normalizedPublicId = requireText(publicId, "publicId", 64);
+        OrderRow order = loadOrderRow(
+                jdbcClient.sql("SELECT id FROM pf_subscription_order WHERE public_id = :publicId")
+                        .param("publicId", normalizedPublicId)
+                        .query(Long.class)
+                        .optional()
+                        .orElseThrow(() -> new PlatformApiException(
+                                ErrorCode.ORDER_NOT_FOUND,
+                                "销售订单不存在"
+                        )),
+                false
+        );
+        entitlementService.retryFulfillment(order.id(), traceId);
+        auditService.record(
+                actor.userId(),
+                actor.publicId(),
+                "ORDER_FULFILLMENT_RETRIED",
+                "SUBSCRIPTION_ORDER",
+                normalizedPublicId,
+                toJson(Map.of("status", loadOrder(normalizedPublicId, false).status())),
+                traceId
+        );
+        return loadOrder(normalizedPublicId, false);
+    }
+
     public OrderView paySimulated(
             String publicId,
             PayCommand command,

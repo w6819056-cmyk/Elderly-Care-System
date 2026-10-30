@@ -183,6 +183,20 @@ class EntitlementServiceTest {
     }
 
     @Test
+    void appliesOrderDependencyBeforeValidatingThePurchasedModule() {
+        Fixture fixture = fixture("ACTIVE", "PAID", "PERIOD", 365, 0, null, null);
+        long dependencyModuleId = addModule("base", "基础能力", 1);
+        addRequiredDependency(fixture.moduleId(), dependencyModuleId);
+        addOrderItem(fixture.orderId(), dependencyModuleId, "base", "基础能力", "PENDING");
+
+        service.applyPaidOrder(fixture.orderId());
+
+        assertThat(orderStatus(fixture.orderId())).isEqualTo("FULFILLED");
+        assertThat(count("SELECT COUNT(*) FROM pf_entitlement WHERE enterprise_id = :id", fixture.enterpriseId()))
+                .isEqualTo(2);
+    }
+
+    @Test
     void appliesPendingPackageItemsWhilePreservingSkippedPerpetualItems() {
         Fixture fixture = fixture("ACTIVE", "PAID", "PERPETUAL", 0, 0, null, true);
         jdbc.sql("""

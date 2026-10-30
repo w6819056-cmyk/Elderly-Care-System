@@ -47,7 +47,7 @@ class PlatformAuthServiceTest {
         var platformClock = new PlatformClock(clock);
         passwordEncoder = new BCryptPasswordEncoder(4);
         repository = new PlatformAdminRepository(database.jdbcClient());
-        tokenService = new PlatformTokenService(SECRET, Duration.ofHours(8));
+        tokenService = new PlatformTokenService(SECRET, Duration.ofHours(8), clock);
         service = new PlatformAuthService(
                 repository,
                 passwordEncoder,

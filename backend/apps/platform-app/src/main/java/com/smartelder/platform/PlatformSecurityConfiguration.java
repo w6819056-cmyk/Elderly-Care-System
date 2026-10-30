@@ -59,6 +59,10 @@ public class PlatformSecurityConfiguration {
                                 "/api/platform/v1/instances/*/license"
                         ).permitAll()
                         .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/platform/v1/instances/*/ack-license"
+                        ).permitAll()
+                        .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
