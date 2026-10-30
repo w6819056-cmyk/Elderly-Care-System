@@ -2,6 +2,7 @@ package com.smartelder.platform.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.platform.core.auth.PlatformAdminRepository;
+import com.smartelder.platform.core.auth.PlatformAdminService;
 import com.smartelder.platform.core.auth.PlatformAuthService;
 import com.smartelder.platform.core.auth.PlatformTokenService;
 import com.smartelder.platform.core.common.IdempotencyService;
@@ -58,6 +59,22 @@ public class PlatformCoreConfiguration {
         return new PlatformTokenService(secret, Duration.ofHours(ttlHours));
     }
 
+    @Bean
+    PlatformAdminService platformAdminService(
+            PlatformAdminRepository repository,
+            PasswordEncoder passwordEncoder,
+            PlatformAuditService auditService,
+            PlatformClock clock,
+            ObjectMapper objectMapper
+    ) {
+        return new PlatformAdminService(
+                repository,
+                passwordEncoder,
+                auditService,
+                clock,
+                objectMapper
+        );
+    }
     @Bean
     PlatformAuthService platformAuthService(
             PlatformAdminRepository repository,

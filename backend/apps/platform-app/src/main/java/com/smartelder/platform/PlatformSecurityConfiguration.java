@@ -72,7 +72,7 @@ public class PlatformSecurityConfiguration {
                             writeError(request, response, code, requestedMessage);
                         })
                         .accessDeniedHandler((request, response, exception) ->
-                                writeError(request, response, ErrorCode.FORBIDDEN, null))
+                                writeError(request, response, ErrorCode.PERMISSION_DENIED, null))
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

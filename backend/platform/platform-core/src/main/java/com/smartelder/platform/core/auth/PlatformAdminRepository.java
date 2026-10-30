@@ -5,6 +5,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -208,10 +209,244 @@ public class PlatformAdminRepository {
                 .single();
     }
 
+    public Optional<AdminRow> findAdminByPublicId(String publicId) {
+        return jdbcClient.sql("""
+                        SELECT id, public_id, username, display_name, status, created_at
+                        FROM pf_admin_user
+                        WHERE public_id = :publicId
+                        """)
+                .param("publicId", publicId)
+                .query((rs, rowNum) -> new AdminRow(
+                        rs.getLong("id"),
+                        rs.getString("public_id"),
+                        rs.getString("username"),
+                        rs.getString("display_name"),
+                        rs.getString("status"),
+                        rs.getTimestamp("created_at").toInstant()
+                ))
+                .optional();
+    }
+
+    public List<AdminRow> findAdmins(int offset, int limit) {
+        return jdbcClient.sql("""
+                        SELECT id, public_id, username, display_name, status, created_at
+                        FROM pf_admin_user
+                        ORDER BY created_at, id
+                        LIMIT :limit OFFSET :offset
+                        """)
+                .param("limit", limit)
+                .param("offset", offset)
+                .query((rs, rowNum) -> new AdminRow(
+                        rs.getLong("id"),
+                        rs.getString("public_id"),
+                        rs.getString("username"),
+                        rs.getString("display_name"),
+                        rs.getString("status"),
+                        rs.getTimestamp("created_at").toInstant()
+                ))
+                .list();
+    }
+
+    public long countAdmins() {
+        return jdbcClient.sql("SELECT COUNT(*) FROM pf_admin_user")
+                .query(Long.class)
+                .single();
+    }
+
+    public List<RoleRow> findAllRoles() {
+        return jdbcClient.sql("""
+                        SELECT id, public_id, code, name, built_in, created_at
+                        FROM pf_admin_role
+                        ORDER BY built_in DESC, code
+                        """)
+                .query((rs, rowNum) -> new RoleRow(
+                        rs.getLong("id"),
+                        rs.getString("public_id"),
+                        rs.getString("code"),
+                        rs.getString("name"),
+                        rs.getBoolean("built_in"),
+                        rs.getTimestamp("created_at").toInstant()
+                ))
+                .list();
+    }
+
+    public Optional<RoleRow> findRoleByPublicId(String publicId) {
+        return jdbcClient.sql("""
+                        SELECT id, public_id, code, name, built_in, created_at
+                        FROM pf_admin_role
+                        WHERE public_id = :publicId
+                        """)
+                .param("publicId", publicId)
+                .query((rs, rowNum) -> new RoleRow(
+                        rs.getLong("id"),
+                        rs.getString("public_id"),
+                        rs.getString("code"),
+                        rs.getString("name"),
+                        rs.getBoolean("built_in"),
+                        rs.getTimestamp("created_at").toInstant()
+                ))
+                .optional();
+    }
+
+    public Optional<RoleRow> findRoleByCode(String code) {
+        return jdbcClient.sql("""
+                        SELECT id, public_id, code, name, built_in, created_at
+                        FROM pf_admin_role
+                        WHERE code = :code
+                        """)
+                .param("code", code)
+                .query((rs, rowNum) -> new RoleRow(
+                        rs.getLong("id"),
+                        rs.getString("public_id"),
+                        rs.getString("code"),
+                        rs.getString("name"),
+                        rs.getBoolean("built_in"),
+                        rs.getTimestamp("created_at").toInstant()
+                ))
+                .optional();
+    }
+
+    public Set<String> findPermissionCodesForRole(long roleId) {
+        return new LinkedHashSet<>(jdbcClient.sql("""
+                        SELECT p.code
+                        FROM pf_admin_role_permission rp
+                        JOIN pf_admin_permission p ON p.id = rp.permission_id
+                        WHERE rp.role_id = :roleId
+                        ORDER BY p.code
+                        """)
+                .param("roleId", roleId)
+                .query(String.class)
+                .list());
+    }
+
+    public Optional<PermissionRow> findPermissionByCode(String code) {
+        return jdbcClient.sql("""
+                        SELECT id, code FROM pf_admin_permission WHERE code = :code
+                        """)
+                .param("code", code)
+                .query((rs, rowNum) -> new PermissionRow(
+                        rs.getLong("id"),
+                        rs.getString("code")
+                ))
+                .optional();
+    }
+
+    public void createAdmin(
+            String publicId,
+            String username,
+            String passwordHash,
+            String displayName,
+            Instant now
+    ) {
+        jdbcClient.sql("""
+                        INSERT INTO pf_admin_user(
+                            public_id, username, password_hash, display_name, status,
+                            failed_login_count, locked_until, created_at, updated_at, version
+                        ) VALUES (
+                            :publicId, :username, :passwordHash, :displayName, 'ACTIVE',
+                            0, NULL, :now, :now, 0
+                        )
+                        """)
+                .param("publicId", publicId)
+                .param("username", username)
+                .param("passwordHash", passwordHash)
+                .param("displayName", displayName)
+                .param("now", Timestamp.from(now))
+                .update();
+    }
+
+    public void createRole(
+            String publicId,
+            String code,
+            String name,
+            Instant now
+    ) {
+        jdbcClient.sql("""
+                        INSERT INTO pf_admin_role(
+                            public_id, code, name, built_in, created_at, updated_at, version
+                        ) VALUES (
+                            :publicId, :code, :name, FALSE, :now, :now, 0
+                        )
+                        """)
+                .param("publicId", publicId)
+                .param("code", code)
+                .param("name", name)
+                .param("now", Timestamp.from(now))
+                .update();
+    }
+
+    public void updateAdminStatus(String publicId, String status, Instant now) {
+        int updated = jdbcClient.sql("""
+                        UPDATE pf_admin_user
+                        SET status = :status,
+                            updated_at = :now,
+                            version = version + 1
+                        WHERE public_id = :publicId
+                        """)
+                .param("status", status)
+                .param("now", Timestamp.from(now))
+                .param("publicId", publicId)
+                .update();
+        if (updated != 1) {
+            throw new IllegalStateException("platform admin status update affected " + updated + " rows");
+        }
+    }
+
+    public void replaceAdminRoles(long userId, Set<Long> roleIds) {
+        jdbcClient.sql("DELETE FROM pf_admin_user_role WHERE user_id = :userId")
+                .param("userId", userId)
+                .update();
+        for (Long roleId : roleIds) {
+            jdbcClient.sql("""
+                            INSERT INTO pf_admin_user_role(user_id, role_id)
+                            VALUES (:userId, :roleId)
+                            """)
+                    .param("userId", userId)
+                    .param("roleId", roleId)
+                    .update();
+        }
+    }
+
+    public void replaceRolePermissions(long roleId, Set<Long> permissionIds) {
+        jdbcClient.sql("DELETE FROM pf_admin_role_permission WHERE role_id = :roleId")
+                .param("roleId", roleId)
+                .update();
+        for (Long permissionId : permissionIds) {
+            jdbcClient.sql("""
+                            INSERT INTO pf_admin_role_permission(role_id, permission_id)
+                            VALUES (:roleId, :permissionId)
+                            """)
+                    .param("roleId", roleId)
+                    .param("permissionId", permissionId)
+                    .update();
+        }
+    }
     private static Instant toInstant(Timestamp timestamp) {
         return timestamp == null ? null : timestamp.toInstant();
     }
 
+    public record AdminRow(
+            long id,
+            String publicId,
+            String username,
+            String displayName,
+            String status,
+            Instant createdAt
+    ) {
+    }
+
+    public record RoleRow(
+            long id,
+            String publicId,
+            String code,
+            String name,
+            boolean builtIn,
+            Instant createdAt
+    ) {
+    }
+
+    public record PermissionRow(long id, String code) {
+    }
     public record PlatformAdminAccount(
             long id,
             String publicId,
