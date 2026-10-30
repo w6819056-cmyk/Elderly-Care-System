@@ -1,0 +1,9 @@
+# 开发环境：启动时自动建表并写入演示数据
+spring:
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/data-demo.sql
+      continue-on-error: false

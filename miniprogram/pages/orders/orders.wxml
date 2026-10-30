@@ -1,0 +1,74 @@
+<view class="container">
+  <view class="tab-row">
+    <view class="tab {{tab === 'mall' ? 'active' : ''}}" bindtap="switchTab" data-tab="mall">服务商城</view>
+    <view class="tab {{tab === 'orders' ? 'active' : ''}}" bindtap="switchTab" data-tab="orders">我的订单</view>
+  </view>
+
+  <view class="card" wx:if="{{role === 'FAMILY'}}">
+    <view class="row">
+      <text class="label">代下单对象</text>
+      <text class="value">{{elderName || '未绑定老人'}}</text>
+    </view>
+  </view>
+
+  <block wx:if="{{tab === 'mall'}}">
+    <view wx:if="{{items.length === 0}}" class="card empty">暂无可下单的服务项目</view>
+    <view class="card" wx:for="{{items}}" wx:key="id" bindtap="chooseItem" data-index="{{index}}">
+      <view class="row">
+        <text class="card-title">{{item.name}}</text>
+        <text class="badge blue">{{item.categoryLabel}}</text>
+      </view>
+      <view class="muted">{{item.description}}</view>
+      <view class="row">
+        <text class="label">服务区域 {{item.serviceArea}} · {{item.durationMin}} 分钟</text>
+        <text class="value danger-value">¥{{item.price}}</text>
+      </view>
+    </view>
+  </block>
+
+  <block wx:else>
+    <view wx:if="{{orders.length === 0}}" class="card empty">还没有订单</view>
+    <view class="card" wx:for="{{orders}}" wx:key="id">
+      <view class="row">
+        <text class="card-title">{{item.itemName}}</text>
+        <text class="badge {{item.status === 'COMPLETED' ? 'green' : item.status === 'CANCELLED' || item.status === 'REFUNDED' ? 'gray' : 'blue'}}">{{item.statusLabel}}</text>
+      </view>
+      <view class="muted">订单号 {{item.orderNo}}</view>
+      <view class="muted">地址 {{item.address}}</view>
+      <view class="row">
+        <text class="label">{{item.appointTime || '立即服务'}}</text>
+        <text class="value">¥{{item.amountText}}</text>
+      </view>
+      <view style="display: flex; gap: 16rpx; margin-top: 16rpx;">
+        <button
+          wx:if="{{item.status === 'PENDING_PAY' || item.status === 'PENDING_ACCEPT'}}"
+          class="btn plain"
+          style="flex: 1;"
+          bindtap="cancelOrder"
+          data-id="{{item.id}}"
+        >取消订单</button>
+        <button
+          wx:if="{{item.status === 'PENDING_REVIEW'}}"
+          class="btn"
+          style="flex: 1;"
+          bindtap="reviewOrder"
+          data-id="{{item.id}}"
+        >去评价</button>
+      </view>
+    </view>
+  </block>
+
+  <!-- 下单弹层 -->
+  <view wx:if="{{selectedItem}}" class="sheet-mask" bindtap="closeSheet">
+    <view class="sheet" catchtap="noop">
+      <view class="card-title">{{selectedItem.name}}</view>
+      <view class="muted" style="margin-bottom: 18rpx;">¥{{selectedItem.price}} · {{selectedItem.durationMin}} 分钟</view>
+      <input class="input" placeholder="服务地址" value="{{address}}" bindinput="onAddress" />
+      <input class="input" placeholder="预约时间（可选，格式 2026-03-01 09:00）" value="{{appointTime}}" bindinput="onAppointTime" />
+      <input class="input" placeholder="备注（可选）" value="{{remark}}" bindinput="onRemark" />
+      <button class="btn" bindtap="submitOrder">提交订单</button>
+      <view style="height: 16rpx;"></view>
+      <button class="btn plain" bindtap="closeSheet">取消</button>
+    </view>
+  </view>
+</view>
