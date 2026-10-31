@@ -76,6 +76,43 @@ class ModuleAccessQueryTest {
     }
 
     @Test
+    void permanentGrantDoesNotExpireByDate() {
+        Fixture f = fixture(NOW.minusSeconds(30 * 86400L), NOW.plusSeconds(10 * 86400L));
+        f.jdbc.sql("UPDATE lic_module_entitlement SET perpetual=TRUE, expires_at=NULL WHERE module_code='membership'").update();
+
+        var decision = f.query.evaluate("membership", "MemberResource", "write", f.storeId,
+                NOW.plusSeconds(10 * 86400L));
+
+        assertThat(decision.state()).isEqualTo("ACTIVE");
+        assertThat(decision.allowed()).isTrue();
+    }
+
+    @Test
+    void revokedInstanceBlocksModuleAccessImmediately() {
+        Fixture f = fixture(NOW.plusSeconds(10 * 86400L), NOW);
+        f.jdbc.sql("UPDATE lic_license_snapshot SET platform_instance_status='REVOKED' WHERE id=1").update();
+
+        var decision = f.query.evaluate("membership", "MemberResource", "read", f.storeId, NOW);
+
+        assertThat(decision.allowed()).isFalse();
+        assertThat(decision.reasonCode()).isEqualTo("ENTERPRISE_SUSPENDED");
+    }
+
+    @Test
+    void successfulPlatformRecoveryRestoresModuleAccess() {
+        Fixture f = fixture(NOW.plusSeconds(10 * 86400L), NOW);
+        f.jdbc.sql("UPDATE lic_license_snapshot SET platform_instance_status='SUSPENDED' WHERE id=1").update();
+        assertThat(f.query.evaluate("membership", "MemberResource", "read", f.storeId, NOW).allowed()).isFalse();
+
+        f.jdbc.sql("UPDATE lic_license_snapshot SET platform_instance_status='ACTIVE', last_successful_sync_at=:now WHERE id=1")
+                .param("now", Timestamp.from(NOW)).update();
+
+        var recovered = f.query.evaluate("membership", "MemberResource", "read", f.storeId, NOW);
+        assertThat(recovered.state()).isEqualTo("ACTIVE");
+        assertThat(recovered.allowed()).isTrue();
+    }
+
+    @Test
     void windDownWritePermissionIsScopedToItsResource() {
         Fixture f = fixture(NOW.minusSeconds(1 * 86400L), NOW);
         var otherResource = f.query.evaluate("membership", "OtherResource", "write", f.storeId, NOW);

@@ -205,9 +205,9 @@ The legacy `admin` application currently serves the original single-tenant workf
 - No new production interfaces; this task closes the contract with end-to-end evidence.
 - Test time-dependent state through injected `Clock`; do not wait in real time.
 
-- [ ] **Step 1: Add boundary matrix tests** for exactly 7 days offline vs one instant beyond; exactly 3 days in wind-down vs one instant beyond; permanent, trial, suspended enterprise, revoked instance and platform recovery.
+- [x] **Step 1: Add boundary matrix tests** for exactly 7 days offline vs one instant beyond; exactly 3 days in wind-down vs one instant beyond; permanent, trial, suspended enterprise, revoked instance and platform recovery.
 - [ ] **Step 2: Add sync recovery test** proving a failed heartbeat preserves the last good license, next successful heartbeat applies a newer version, and ACK includes that version's exact digest only after commit.
-- [ ] **Step 3: Add full assignment lifecycle test**: allocate, suspend/close store without releasing, revoke from HQ, verify capacity released, then allocate another store.
+- [x] **Step 3: Add full assignment lifecycle test**: allocate, suspend/close store without releasing, revoke from HQ, verify capacity released, then allocate another store.
 - [x] **Step 4: Run backend full verification** from `backend/`: `mvn test`; run tenant and platform test suites independently if the full output makes failures hard to isolate.
 - [x] **Step 5: Run frontend checks** from `admin/`: `npx tsc --noEmit` and `npm run build`.
 - [x] **Step 6: Inspect architecture boundaries and final diff**: platform code has no tenant business imports; tenant code does not connect to platform DB; no secrets are logged; no existing migration is modified; no DROP initialization includes new authorization tables.

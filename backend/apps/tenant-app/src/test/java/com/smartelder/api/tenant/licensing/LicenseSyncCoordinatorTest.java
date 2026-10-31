@@ -1,6 +1,7 @@
 package com.smartelder.api.tenant.licensing;
 
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,12 +23,70 @@ import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.ResourceAccessException;
+import com.smartelder.core.licensing.TenantLicenseRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 
 class LicenseSyncCoordinatorTest {
+
+    @Test
+    void failedHeartbeatPreservesSnapshotAndRetryAppliesNewVersionBeforeAcknowledging() throws Exception {
+        Instant now = Instant.parse("2026-10-31T00:00:00Z");
+        var current = new TenantLicenseRepository.LicenseStatus("ORG-TEST", "ins-test", "fp-test", "lic-4",
+                2, 4, "a".repeat(64), now, now, "ACTIVE", List.of());
+        LicenseKeyPair keys = LicenseKeyPair.generate();
+        var signer = new Ed25519LicenseSigner("key-1", keys.privateKey());
+        var signed = signer.sign(new LicenseDocument(2, 5, "lic-5", "ORG-TEST", "ins-test", "fp-test",
+                now, now, null, 7, new LicenseDocument.HeartbeatPolicy(6, 30),
+                List.of(new LicenseModule("membership", "FORMAL", "ACTIVE", now, null, true, 2)),
+                new LicenseSignature("Ed25519", "key-1", null)));
+        var recovered = new TenantLicenseRepository.LicenseStatus("ORG-TEST", "ins-test", "fp-test", "lic-5",
+                2, 5, LicenseCanonicalizer.sha256(signed), now, now, "ACTIVE", List.of());
+        var client = mock(PlatformLicenseClient.class);
+        var service = mock(TenantLicenseService.class);
+        var properties = new TenantLicenseProperties();
+        var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        properties.setOrgNo("ORG-TEST");
+        properties.setInstancePublicId("ins-test");
+        properties.setInstanceFingerprint("fp-test");
+        String digest = LicenseCanonicalizer.sha256(signed);
+        var transfer = mapper.createObjectNode()
+                .put("payloadJson", LicenseCanonicalizer.canonicalize(signed))
+                .put("sha256", digest)
+                .put("signature", signed.signature().value())
+                .put("signatureAlgorithm", "Ed25519")
+                .put("keyId", "key-1");
+        var heartbeat = mapper.createObjectNode().set("data", mapper.createObjectNode()
+                .put("platformTime", now.toString()).put("instanceStatus", "ONLINE")
+                .set("licensePayload", transfer));
+        AtomicReference<TenantLicenseRepository.LicenseStatus> localSnapshot = new AtomicReference<>(current);
+        when(service.currentStatus()).thenAnswer(invocation -> localSnapshot.get());
+        doAnswer(invocation -> {
+            localSnapshot.set(recovered);
+            return null;
+        }).when(service).acceptVerifiedSnapshot(org.mockito.ArgumentMatchers.any());
+        when(client.heartbeat(4)).thenThrow(new ResourceAccessException("platform unavailable")).thenReturn(heartbeat);
+        var verifier = new TenantLicenseVerifier(Map.of("key-1", keys.publicKey()), mapper,
+                Clock.fixed(now, ZoneOffset.UTC));
+        var coordinator = new LicenseSyncCoordinator(client, service,
+                verifier, properties, mapper, Clock.fixed(now, ZoneOffset.UTC));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(coordinator::syncNow)
+                .isInstanceOf(ResourceAccessException.class);
+        org.assertj.core.api.Assertions.assertThat(service.currentStatus()).isSameAs(current);
+
+        coordinator.syncNow();
+
+        org.assertj.core.api.Assertions.assertThat(service.currentStatus()).isSameAs(recovered);
+        InOrder order = inOrder(service, client);
+        order.verify(service).acceptVerifiedSnapshot(org.mockito.ArgumentMatchers.argThat(
+                snapshot -> snapshot.version() == 5 && snapshot.sha256().equals(digest)));
+        order.verify(client).acknowledge(5, digest);
+    }
 
     @Test
     void recordsExplicitPlatformSuspensionAndPropagatesControlError() {
