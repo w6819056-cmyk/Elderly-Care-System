@@ -12,4 +12,11 @@
     <artifactId>care-core-api</artifactId>
     <name>care-core-api</name>
     <description>Core public APIs</description>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 </project>
