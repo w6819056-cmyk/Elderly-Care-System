@@ -48,7 +48,7 @@ class HqModuleControllerIntegrationTest {
 
     @Test
     void hqCanEnableAssignInspectAndRevokeLicensedModule() throws Exception {
-        String module = "testmod" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String module = "membership";
         String store = UUID.randomUUID().toString();
         createdModules.add(module); createdStores.add(store);
         Timestamp now = Timestamp.from(Instant.now());

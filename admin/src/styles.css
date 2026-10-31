@@ -120,3 +120,62 @@ input:focus, select:focus { outline: 2px solid #cfe0ff; border-color: var(--bran
 .error { color: var(--red); font-size: 13px; margin-top: 10px; }
 .empty { color: var(--muted); text-align: center; padding: 28px 0; font-size: 13px; }
 .muted { color: var(--muted); font-size: 12px; }
+
+.tenant-login-page { min-height: 100vh; display: grid; place-items: center; background: #edf3f4; padding: 20px; }
+.tenant-login { width: min(100%, 390px); padding: 28px; background: #fff; border: 1px solid #d6e1df; border-radius: 8px; }
+.tenant-login h1 { margin: 0; font-size: 22px; }
+.tenant-login p { margin: 6px 0 24px; color: var(--muted); }
+.tenant-login label { display: block; margin: 14px 0 6px; font-size: 13px; }
+.tenant-login input { width: 100%; min-height: 38px; }
+.tenant-login button { width: 100%; min-height: 38px; margin-top: 20px; }
+.tenant-page { max-width: 1180px; margin: 0 auto; padding: 28px 32px 48px; color: #202d32; }
+.tenant-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid #d9e3e1; }
+.tenant-header h1 { margin: 2px 0 0; font-size: 24px; }
+.tenant-eyebrow { margin: 0; color: #49746e; font-size: 12px; }
+.tenant-user { display: flex; align-items: center; gap: 14px; }
+.tenant-license-strip { display: flex; gap: 32px; flex-wrap: wrap; padding: 16px 0; border-bottom: 1px solid #d9e3e1; }
+.tenant-license-strip div { display: flex; flex-direction: column; gap: 4px; }
+.tenant-license-strip span, .tenant-facts dt { color: #647377; font-size: 12px; }
+.tenant-license-strip strong { font-weight: 600; font-size: 13px; }
+.tenant-list-head { display: flex; justify-content: space-between; align-items: center; margin: 22px 0 12px; }
+.tenant-list-head h2 { margin: 0; font-size: 17px; }
+.tenant-module-list { border-top: 1px solid #d9e3e1; }
+.tenant-module { padding: 18px 0; border-bottom: 1px solid #d9e3e1; }
+.tenant-module-main { display: grid; grid-template-columns: minmax(190px, 1.1fr) minmax(300px, 2fr) minmax(220px, 1.3fr); align-items: center; gap: 20px; }
+.tenant-module-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.tenant-module-title h3 { margin: 0 0 5px; font-size: 16px; }
+.tenant-code { color: #718083; font-size: 11px; }
+.tenant-state { border-radius: 4px; padding: 4px 7px; font-size: 11px; white-space: nowrap; }
+.tenant-state.is-active { color: #176746; background: #e5f3ed; }
+.tenant-state.is-muted { color: #59696d; background: #edf0f0; }
+.tenant-facts { display: grid; grid-template-columns: repeat(2, minmax(100px, 1fr)); gap: 9px 18px; margin: 0; }
+.tenant-facts div { min-width: 0; }
+.tenant-facts dt { margin-bottom: 3px; }
+.tenant-facts dd { margin: 0; font-size: 13px; }
+.tenant-module-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tenant-assign-control { display: flex; align-items: center; gap: 6px; }
+.tenant-assign-control select { min-width: 150px; max-width: 210px; }
+.tenant-assignment-list { margin: 16px 0 0; padding-left: calc(25% + 8px); }
+.tenant-assignment-list h4 { margin: 0 0 5px; font-size: 12px; color: #647377; font-weight: 500; }
+.tenant-assignment { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px; padding: 7px 0; border-top: 1px solid #edf1f0; font-size: 13px; }
+.tenant-assignment small { color: #718083; margin-left: 8px; }
+.tenant-status-active { color: #176746; }
+.tenant-status-revoked, .tenant-link-danger { color: #a3423a; }
+.tenant-link-danger { border: 0; background: transparent; padding: 4px; }
+.tenant-error { color: #a3423a; font-size: 13px; }
+.tenant-notice { margin-top: 14px; padding: 10px 12px; border-left: 3px solid #b84c42; background: #fbefed; }
+.tenant-empty { padding: 26px 0; color: #647377; }
+@media (max-width: 860px) {
+  .tenant-page { padding: 20px 18px 36px; }
+  .tenant-module-main { grid-template-columns: 1fr; gap: 14px; }
+  .tenant-module-actions { justify-content: flex-start; }
+  .tenant-assignment-list { padding-left: 0; }
+}
+@media (max-width: 480px) {
+  .tenant-header { align-items: flex-start; }
+  .tenant-license-strip { gap: 15px 24px; }
+  .tenant-assign-control { align-items: stretch; flex-direction: column; width: 100%; }
+  .tenant-assign-control select { max-width: none; width: 100%; }
+  .tenant-assignment { grid-template-columns: minmax(0, 1fr) auto; }
+  .tenant-assignment small { display: block; margin: 3px 0 0; overflow-wrap: anywhere; }
+}

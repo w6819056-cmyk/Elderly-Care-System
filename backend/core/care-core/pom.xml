@@ -18,6 +18,10 @@
             <artifactId>care-core-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>com.smartelder</groupId>
+            <artifactId>care-module-api</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
         </dependency>

@@ -5,13 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.smartelder.core.api.access.DataScope;
 import com.smartelder.core.api.access.TenantAccessContext;
+import com.smartelder.module.api.ModuleDependency;
+import com.smartelder.module.api.ModuleDescriptor;
+import com.smartelder.module.api.ModuleRegistry;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class TenantModuleServiceTest {
+    private static final java.time.Instant NOW = java.time.Instant.parse("2026-10-31T00:00:00Z");
     private final FakeRepository repository = new FakeRepository();
-    private final TenantModuleService service = new TenantModuleService(repository);
+    private final TenantModuleService service = new TenantModuleService(repository, java.time.Clock.systemUTC(), registry());
     private final TenantAccessContext hq = new TenantAccessContext(7, "hq-7", "HQ", null,
             Set.of("HQ_ADMIN"), Set.of("core.module.view", "core.module.manage",
                     "core.module.assignment.manage"), new DataScope("ALL", Set.of()));
@@ -19,11 +23,11 @@ class TenantModuleServiceTest {
     @Test
     void assignmentRequiresEnabledFormalEntitlementAndActiveStoreAndUsesIndependentQuota() {
         repository.entitlements = List.of(
-                new TenantLicenseRepository.ModuleGrant("membership", "FORMAL", "ACTIVE", null, null, true, 1),
-                new TenantLicenseRepository.ModuleGrant("institution", "FORMAL", "ACTIVE", null, null, true, 2));
+                new TenantLicenseRepository.ModuleGrant("membership", "FORMAL", "ACTIVE", NOW, null, true, 1),
+                new TenantLicenseRepository.ModuleGrant("institution", "FORMAL", "ACTIVE", NOW, null, true, 2));
         repository.enabled.addAll(Set.of("membership", "institution"));
-        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "门店A", "ACTIVE"));
-        repository.stores.put("store-b", new TenantModuleRepository.StoreRef(2, "store-b", "门店B", "ACTIVE"));
+        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "A", "门店A", "ACTIVE"));
+        repository.stores.put("store-b", new TenantModuleRepository.StoreRef(2, "store-b", "B", "门店B", "ACTIVE"));
 
         var first = service.assignStore("membership", "store-a", "idem-1", hq, "trace-1");
         assertThat(first.status()).isEqualTo("ACTIVE");
@@ -36,12 +40,12 @@ class TenantModuleServiceTest {
     @Test
     void storeSuspensionDoesNotReleaseQuotaAndExplicitHqRevocationDoes() {
         repository.entitlements = List.of(
-                new TenantLicenseRepository.ModuleGrant("membership", "FORMAL", "ACTIVE", null, null, true, 1));
+                new TenantLicenseRepository.ModuleGrant("membership", "FORMAL", "ACTIVE", NOW, null, true, 1));
         repository.enabled.add("membership");
-        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "门店A", "ACTIVE"));
-        repository.stores.put("store-b", new TenantModuleRepository.StoreRef(2, "store-b", "门店B", "ACTIVE"));
+        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "A", "门店A", "ACTIVE"));
+        repository.stores.put("store-b", new TenantModuleRepository.StoreRef(2, "store-b", "B", "门店B", "ACTIVE"));
         service.assignStore("membership", "store-a", "idem-1", hq, "trace-1");
-        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "门店A", "CLOSED"));
+        repository.stores.put("store-a", new TenantModuleRepository.StoreRef(1, "store-a", "A", "门店A", "CLOSED"));
 
         assertThatThrownBy(() -> service.assignStore("membership", "store-b", "idem-2", hq, "trace-2"))
                 .isInstanceOf(TenantModuleException.class).hasMessageContaining("quota");
@@ -53,9 +57,8 @@ class TenantModuleServiceTest {
     @Test
     void trialEntitlementCannotSatisfyFormalDependency() {
         repository.entitlements = List.of(
-                new TenantLicenseRepository.ModuleGrant("membership", "TRIAL", "ACTIVE", null, null, true, 5),
-                new TenantLicenseRepository.ModuleGrant("institution", "FORMAL", "ACTIVE", null, null, true, 5));
-        repository.dependencies.put("institution", Set.of("membership"));
+                new TenantLicenseRepository.ModuleGrant("membership", "TRIAL", "ACTIVE", NOW, null, true, 5),
+                new TenantLicenseRepository.ModuleGrant("institution", "FORMAL", "ACTIVE", NOW, null, true, 5));
         assertThatThrownBy(() -> service.setActivation("institution", true, hq, "trace-1"))
                 .isInstanceOf(TenantModuleException.class).hasMessageContaining("dependency");
     }
@@ -71,13 +74,14 @@ class TenantModuleServiceTest {
         List<TenantLicenseRepository.ModuleGrant> entitlements = List.of();
         final java.util.Map<String, TenantModuleRepository.StoreRef> stores = new java.util.HashMap<>();
         final java.util.Set<String> enabled = new java.util.HashSet<>();
-        final java.util.Map<String, Set<String>> dependencies = new java.util.HashMap<>();
         final java.util.Map<String, TenantModuleRepository.AssignmentView> assignments = new java.util.HashMap<>();
         @Override public List<TenantLicenseRepository.ModuleGrant> entitlements() { return entitlements; }
         @Override public Set<String> enabledModules() { return Set.copyOf(enabled); }
-        @Override public Set<String> dependencies(String module) { return dependencies.getOrDefault(module, Set.of()); }
         @Override public List<TenantModuleRepository.ModuleSummary> listModules() { return List.of(); }
         @Override public List<TenantModuleRepository.AssignmentView> listAssignments(String module) { return List.copyOf(assignments.values()); }
+        @Override public List<TenantModuleRepository.StoreRef> listActiveStores() {
+            return stores.values().stream().filter(store -> "ACTIVE".equals(store.status())).toList();
+        }
         @Override public TenantModuleRepository.StoreRef findStore(String publicId) { return stores.get(publicId); }
         @Override public TenantModuleRepository.AssignmentView assign(String module, String store, String key, long actor, String trace) {
             String id = module + ":" + store;
@@ -95,5 +99,12 @@ class TenantModuleServiceTest {
             if (current != null) assignments.put(id, new TenantModuleRepository.AssignmentView(id, module, store,
                     current.storeName(), "REVOKED", current.idempotencyKey()));
         }
+    }
+
+    private static ModuleRegistry registry() {
+        return new ModuleRegistry(List.of(
+                new ModuleDescriptor("membership", "会员", "1.0.0", 10, List.of(), Set.of()),
+                new ModuleDescriptor("institution", "机构康养", "1.0.0", 20,
+                        List.of(new ModuleDependency("membership", "1.0.0")), Set.of())));
     }
 }

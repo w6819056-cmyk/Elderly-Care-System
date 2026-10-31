@@ -9,6 +9,8 @@ import Providers from './pages/Providers'
 import Items from './pages/Items'
 import Users from './pages/Users'
 import { getUser } from './api/client'
+import TenantLogin from './pages/tenant/Login'
+import TenantModules from './pages/tenant/Modules'
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const user = getUser()
@@ -21,6 +23,8 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 export default function App() {
   return (
     <Routes>
+      <Route path="/hq/login" element={<TenantLogin />} />
+      <Route path="/hq/modules" element={<TenantModules />} />
       <Route path="/login" element={<Login />} />
       <Route
         path="/"

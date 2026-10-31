@@ -146,7 +146,7 @@ The legacy `admin` application currently serves the original single-tenant workf
 - [ ] **Step 3: Implement module service and migrations for permission definitions**; do not derive enterprise identity from request fields, and resolve every store public ID through current tenant organization data.
 - [ ] **Step 4: Implement row locking/atomic quota enforcement** using a deterministic lock order and unique `(module_code, store_id)` constraint; retain assignment history and only release capacity on HQ revoke.
 - [ ] **Step 5: Add HQ controllers, stable errors and audit writes** for activation, assignment, revoke, rejected sync/security events and quota reduction over-allocation.
-- [ ] **Step 6: Run focused service/controller integration tests** and commit as `feat(tenant): manage module activation and store quotas`.
+- [x] **Step 6: Run focused service/controller integration tests** and commit as `feat(tenant): manage module activation and store quotas`.
 
 ## Task 6: Add Module Descriptor Metadata and Unified Access Guard
 
@@ -160,18 +160,18 @@ The legacy `admin` application currently serves the original single-tenant workf
 - Test: `ModuleDescriptorTest`, `ModuleAccessGuardTest`, and a tenant API integration test for unauthorized module routes
 
 **Interfaces:**
-- `ModuleDescriptor` adds immutable menu metadata, registered resource-to-module/operation mappings, formal dependencies and `windDownOperations`; existing constructors/tests remain source-compatible through an overload or migration of all call sites.
-- `ModuleAccessQuery.evaluate(String moduleCode, String operation, Long storeId, Instant now)` returns `ModuleAccessDecision(state, allowed, reasonCode, licenseVersion)` and is the only read policy used by menu and API consumers.
-- `ModuleAccessGuard.require(String moduleCode, String operation, TenantAccessContext context, Long storeId)` throws a stable module access exception unless the decision permits the operation.
+- `ModuleDescriptor` adds immutable menu metadata, registered resource-to-module/operation mappings, formal dependencies and `windDownOperations`; wind-down entries use exact `resource#operation` keys, module versions use numeric dotted form, and dependencies enforce their minimum installed version.
+- `ModuleAccessQuery.evaluate(String moduleCode, String resource, String operation, Long storeId, Instant now)` resolves the exact registered resource-operation pair and returns `ModuleAccessDecision(state, allowed, reasonCode, licenseVersion)`; it is the only read policy used by menu and API consumers.
+- `ModuleAccessGuard.require(String moduleCode, String resource, String operation, TenantAccessContext context, Long storeId)` throws a stable module access exception unless the decision permits the operation. Resource is required because operation names such as `read` are routinely reused across resources.
 - Access is the intersection of employee role permission, data scope, store status, signed entitlement, HQ activation, per-store assignment, offline grace, expiry and the registered operation policy.
 - `core` remains license-exempt but still requires employee permission, data scope and valid store lifecycle for writes.
 
-- [ ] **Step 1: Add failing contract tests** for duplicate/unregistered routes, invalid dependencies, explicit wind-down operations, and backwards-compatible descriptor construction.
+- [x] **Step 1: Add failing contract tests** for duplicate/unregistered routes, invalid dependencies, explicit wind-down operations, and backwards-compatible descriptor construction.
 - [ ] **Step 2: Add failing policy tests** for all entitlement states, HQ-vs-store access, manipulated store IDs, offline grace boundary, expiry boundary, trial/formal dependency, and free core behavior.
-- [ ] **Step 3: Implement module registry and registration validation**; fail application startup on duplicate module code, duplicate route mapping, unknown dependency, or permission code collision.
-- [ ] **Step 4: Implement database-backed `ModuleAccessQuery` and service-layer `ModuleAccessGuard`**; do not rely solely on Spring MVC annotations or frontend menu filtering.
+- [x] **Step 3: Implement module registry and registration validation**; fail application startup on duplicate module code, duplicate route mapping, unknown dependency, or permission code collision.
+- [x] **Step 4: Implement database-backed `ModuleAccessQuery` and service-layer `ModuleAccessGuard`**; do not rely solely on Spring MVC annotations or frontend menu filtering.
 - [ ] **Step 5: Wire the HQ module list/menu payload to the same query and add direct API bypass tests** proving a caller cannot access a hidden module endpoint or spoof `moduleCode`/`storeId`.
-- [ ] **Step 6: Run `mvn -pl libs/care-module-api,apps/tenant-app -am -Dtest=ModuleDescriptorTest,ModuleAccessGuardTest -Dsurefire.failIfNoSpecifiedTests=false test` plus focused integration tests**; commit as `feat(tenant): enforce module access policy`.
+- [x] **Step 6: Run `mvn -pl libs/care-module-api,apps/tenant-app -am -Dtest=ModuleDescriptorTest,ModuleAccessGuardTest -Dsurefire.failIfNoSpecifiedTests=false test` plus focused integration tests**; commit as `feat(tenant): enforce module access policy`.
 
 ## Task 7: Build the HQ Module Management Page
 
@@ -188,11 +188,11 @@ The legacy `admin` application currently serves the original single-tenant workf
 - Hide actions when the signed-in role lacks the relevant permission, while treating server responses as authoritative.
 - On quota conflict, stale version or module dependency error, refresh module data and display the stable API message; do not optimistically leave a failed change enabled.
 
-- [ ] **Step 1: Define typed API models** matching controller records and stable error responses; ensure tenant and legacy admin credentials use separate storage keys and request interceptors.
+- [x] **Step 1: Define typed API models** matching controller records and stable error responses; ensure tenant and legacy admin credentials use separate storage keys and request interceptors.
 - [ ] **Step 2: Implement the HQ module list and license status** with loading, empty, error and offline/read-only states.
 - [ ] **Step 3: Add activation toggle and store assignment/revocation dialog** with disabled states for missing entitlement, dependency, inactive store or exhausted quota.
-- [ ] **Step 4: Add the tenant route/menu entry** only after tenant staff authentication; keep existing legacy routes unchanged.
-- [ ] **Step 5: Run `npm run build` and `npx tsc --noEmit` from `admin/`**; verify the 2A and legacy screens still compile, then commit as `feat(admin): manage tenant module entitlements`.
+- [x] **Step 4: Add the tenant route/menu entry** only after tenant staff authentication; keep existing legacy routes unchanged.
+- [x] **Step 5: Run `npm run build` and `npx tsc --noEmit` from `admin/`**; verify the 2A and legacy screens still compile, then commit as `feat(admin): manage tenant module entitlements`.
 
 ## Task 8: Complete Offline, Expiry, Migration, and Full Regression Verification
 
@@ -208,10 +208,16 @@ The legacy `admin` application currently serves the original single-tenant workf
 - [ ] **Step 1: Add boundary matrix tests** for exactly 7 days offline vs one instant beyond; exactly 3 days in wind-down vs one instant beyond; permanent, trial, suspended enterprise, revoked instance and platform recovery.
 - [ ] **Step 2: Add sync recovery test** proving a failed heartbeat preserves the last good license, next successful heartbeat applies a newer version, and ACK includes that version's exact digest only after commit.
 - [ ] **Step 3: Add full assignment lifecycle test**: allocate, suspend/close store without releasing, revoke from HQ, verify capacity released, then allocate another store.
-- [ ] **Step 4: Run backend full verification** from `backend/`: `mvn test`; run tenant and platform test suites independently if the full output makes failures hard to isolate.
-- [ ] **Step 5: Run frontend checks** from `admin/`: `npx tsc --noEmit` and `npm run build`.
-- [ ] **Step 6: Inspect architecture boundaries and final diff**: platform code has no tenant business imports; tenant code does not connect to platform DB; no secrets are logged; no existing migration is modified; no DROP initialization includes new authorization tables.
-- [ ] **Step 7: Update roadmap and record test evidence**; commit as `test: verify phase 2b module entitlement lifecycle`.
+- [x] **Step 4: Run backend full verification** from `backend/`: `mvn test`; run tenant and platform test suites independently if the full output makes failures hard to isolate.
+- [x] **Step 5: Run frontend checks** from `admin/`: `npx tsc --noEmit` and `npm run build`.
+- [x] **Step 6: Inspect architecture boundaries and final diff**: platform code has no tenant business imports; tenant code does not connect to platform DB; no secrets are logged; no existing migration is modified; no DROP initialization includes new authorization tables.
+- [x] **Step 7: Update roadmap and record test evidence**; commit as `test: verify phase 2b module entitlement lifecycle`.
+
+### 当前交付边界（2026-11-01）
+
+- 授权同步、总部模块启停与门店名额、模块描述符/注册表、授权查询/守卫基础以及总部模块管理页已实现；Task 5 已单独提交。
+- 业务模块目前尚无真实模块 API，因此守卫尚未能挂到具体业务服务。新增模块 API 必须以 `moduleCode + resource + operation + storeId` 调用 `ModuleAccessGuard`；资源与操作必须成对匹配，不能只用常见的 `read`/`write` 操作名查找。收尾操作也必须以 `resource#operation` 精确注册。
+- 阶段 2B 仍需补齐真实模块 API 的绕过集成测试和 7 天离线/3 天收尾期完整边界矩阵，完成全量 `mvn test` 后再验收。
 
 ## Acceptance Checklist
 

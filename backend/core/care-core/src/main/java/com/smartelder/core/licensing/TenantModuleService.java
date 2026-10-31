@@ -8,24 +8,28 @@ import java.time.Clock;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.smartelder.module.api.ModuleRegistry;
 
 @Service
 public class TenantModuleService {
     private final TenantModuleRepository repository;
     private final Clock clock;
+    private final ModuleRegistry registry;
     public TenantModuleService(TenantModuleRepository repository) {
-        this(repository, Clock.systemUTC());
+        this(repository, Clock.systemUTC(), null);
     }
     @Autowired
-    public TenantModuleService(TenantModuleRepository repository, Clock clock) {
+    public TenantModuleService(TenantModuleRepository repository, Clock clock, ModuleRegistry registry) {
         this.repository = Objects.requireNonNull(repository);
         this.clock = Objects.requireNonNull(clock);
+        this.registry = registry;
     }
 
     @Transactional(readOnly = true)
     public List<TenantModuleRepository.ModuleSummary> listModules(TenantAccessContext actor) {
         require(actor, "core.module.view");
-        return repository.listModules();
+        return repository.listModules().stream()
+                .filter(item -> registry == null || registry.contains(item.moduleCode())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -36,6 +40,12 @@ public class TenantModuleService {
         return repository.listAssignments(moduleCode);
     }
 
+    @Transactional(readOnly = true)
+    public List<TenantModuleRepository.StoreRef> listAssignableStores(TenantAccessContext actor) {
+        require(actor, "core.module.assignment.manage");
+        return repository.listActiveStores();
+    }
+
     @Transactional
     public void setActivation(String moduleCode, boolean enabled, TenantAccessContext actor, String traceId) {
         require(actor, "core.module.manage");
@@ -43,7 +53,7 @@ public class TenantModuleService {
         if (enabled) {
             var grant = grant(moduleCode);
             requireEntitled(grant);
-            for (String dependency : repository.dependencies(moduleCode)) {
+            for (String dependency : dependencies(moduleCode)) {
                 var dependencyGrant = findGrant(dependency);
                 if (dependencyGrant == null || !"FORMAL".equals(dependencyGrant.licenseType())
                         || !"ACTIVE".equals(dependencyGrant.status()) || expired(dependencyGrant)) {
@@ -67,7 +77,7 @@ public class TenantModuleService {
         if (!repository.enabledModules().contains(moduleCode)) {
             throw new TenantModuleException("MODULE_DISABLED", "module is not enabled by headquarters");
         }
-        for (String dependency : repository.dependencies(moduleCode)) {
+        for (String dependency : dependencies(moduleCode)) {
             var dependencyGrant = findGrant(dependency);
             if (dependencyGrant == null || !"FORMAL".equals(dependencyGrant.licenseType())
                     || !"ACTIVE".equals(dependencyGrant.status()) || expired(dependencyGrant)
@@ -95,17 +105,25 @@ public class TenantModuleService {
     private TenantLicenseRepository.ModuleGrant findGrant(String code) {
         return repository.entitlements().stream().filter(item -> item.moduleCode().equals(code)).findFirst().orElse(null);
     }
+    private Set<String> dependencies(String moduleCode) {
+        if (registry == null || !registry.contains(moduleCode)) return Set.of();
+        return registry.require(moduleCode).dependencies().stream()
+                .map(com.smartelder.module.api.ModuleDependency::moduleCode)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
     private boolean expired(TenantLicenseRepository.ModuleGrant grant) {
         return !grant.perpetual() && grant.expiresAt() != null && clock.instant().isAfter(grant.expiresAt());
     }
     private void requireEntitled(TenantLicenseRepository.ModuleGrant grant) {
-        if (!"ACTIVE".equals(grant.status()) || expired(grant)) {
+        if (!"ACTIVE".equals(grant.status()) || clock.instant().isBefore(grant.startsAt()) || expired(grant)) {
             throw new TenantModuleException("MODULE_NOT_LICENSED", "module entitlement is not active");
         }
     }
-    private static void requireModule(String code) {
+    private void requireModule(String code) {
         if (code == null || !code.matches("[a-z][a-z0-9_-]{0,63}"))
             throw new TenantModuleException("NOT_FOUND", "module not found");
+        if (registry != null && !registry.contains(code))
+            throw new TenantModuleException("NOT_FOUND", "module is not registered in this tenant application");
     }
     private static void require(TenantAccessContext actor, String permission) {
         if (actor == null || !"HQ".equals(actor.staffType()) || !actor.permissionCodes().contains(permission))

@@ -34,6 +34,12 @@ public class HqModuleController {
     public ApiResponse<List<?>> list(Authentication auth, HttpServletRequest request) {
         return ApiResponse.success(modules.listModules(context(auth)), trace(request), clock);
     }
+    @GetMapping("/module-stores")
+    public ApiResponse<List<?>> assignableStores(Authentication auth, HttpServletRequest request) {
+        List<StoreOption> stores = modules.listAssignableStores(context(auth)).stream()
+                .map(store -> new StoreOption(store.publicId(), store.storeNo(), store.name(), store.status())).toList();
+        return ApiResponse.success(stores, trace(request), clock);
+    }
     @PutMapping("/modules/{moduleCode}/activation")
     public ApiResponse<Void> activation(@PathVariable String moduleCode, @Valid @RequestBody ActivationRequest body,
             Authentication auth, HttpServletRequest request) {
@@ -59,10 +65,7 @@ public class HqModuleController {
     }
     @GetMapping("/license/status")
     public ApiResponse<?> licenseStatus(Authentication auth, HttpServletRequest request) {
-        TenantStaffPrincipal principal = (TenantStaffPrincipal) auth.getPrincipal();
-        if (!"HQ".equals(principal.accessContext().staffType())
-                || !principal.accessContext().permissionCodes().contains("core.module.view"))
-            throw new com.smartelder.core.licensing.TenantModuleException("PERMISSION_DENIED", "missing permission: core.module.view");
+        modules.listModules(context(auth));
         return ApiResponse.success(licenses.currentStatus(), trace(request), clock);
     }
     private static com.smartelder.core.api.access.TenantAccessContext context(Authentication auth) {
@@ -74,4 +77,5 @@ public class HqModuleController {
     }
     public record ActivationRequest(boolean enabled) {}
     public record AssignmentRequest(@NotBlank String storePublicId) {}
+    public record StoreOption(String publicId, String storeNo, String name, String status) {}
 }

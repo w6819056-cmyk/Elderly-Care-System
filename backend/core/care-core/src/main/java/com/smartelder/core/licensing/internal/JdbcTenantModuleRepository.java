@@ -33,18 +33,34 @@ public class JdbcTenantModuleRepository implements TenantModuleRepository {
         return Set.copyOf(jdbc.sql("SELECT module_code FROM core_enterprise_module WHERE enabled = TRUE")
                 .query(String.class).list());
     }
-    @Override public Set<String> dependencies(String moduleCode) { return Set.of(); }
     @Override public List<ModuleSummary> listModules() {
+        var snapshot = jdbc.sql("SELECT license_version, offline_grace_days, last_successful_sync_at, platform_instance_status "
+                        + "FROM lic_license_snapshot WHERE id=1")
+                .query((rs, row) -> new LicenseAnchor(rs.getLong("license_version"), rs.getInt("offline_grace_days"),
+                        rs.getTimestamp("last_successful_sync_at").toInstant(), rs.getString("platform_instance_status")))
+                .optional().orElse(null);
+        var now = clock.instant();
         return jdbc.sql("""
-                SELECT e.module_code, e.license_type, e.status, e.store_quota,
+                SELECT e.module_code, e.license_type, e.status, e.starts_at, e.expires_at, e.perpetual,
+                       e.license_version, e.store_quota,
                        COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN 1 ELSE 0 END), 0) assigned,
                        COALESCE(MAX(CASE WHEN m.enabled THEN 1 ELSE 0 END), 0) enabled
                 FROM lic_module_entitlement e
                 LEFT JOIN core_store_module_assignment a ON a.module_code = e.module_code
                 LEFT JOIN core_enterprise_module m ON m.module_code = e.module_code
-                GROUP BY e.module_code, e.license_type, e.status, e.store_quota ORDER BY e.module_code
-                """).query((rs, row) -> new ModuleSummary(rs.getString("module_code"), rs.getString("license_type"),
-                rs.getString("status"), rs.getInt("store_quota"), rs.getInt("assigned"), rs.getInt("enabled") == 1)).list();
+                GROUP BY e.module_code, e.license_type, e.status, e.starts_at, e.expires_at, e.perpetual,
+                         e.license_version, e.store_quota ORDER BY e.module_code
+                """).query((rs, row) -> {
+                    String module = rs.getString("module_code");
+                    String licenseStatus = rs.getString("status");
+                    var starts = rs.getTimestamp("starts_at").toInstant();
+                    var expiry = rs.getTimestamp("expires_at") == null ? null : rs.getTimestamp("expires_at").toInstant();
+                    boolean perpetual = rs.getBoolean("perpetual");
+                    boolean enabled = rs.getInt("enabled") == 1;
+                    return new ModuleSummary(module, rs.getString("license_type"), licenseStatus, starts, expiry,
+                            perpetual, rs.getLong("license_version"), rs.getInt("store_quota"), rs.getInt("assigned"),
+                            enabled, effectiveState(licenseStatus, starts, expiry, perpetual, enabled, snapshot, now));
+                }).list();
     }
     @Override public List<AssignmentView> listAssignments(String moduleCode) {
         return jdbc.sql("""
@@ -56,10 +72,15 @@ public class JdbcTenantModuleRepository implements TenantModuleRepository {
                 rs.getString("public_id"), rs.getString("module_code"), rs.getString("store_public_id"),
                 rs.getString("store_name"), rs.getString("status"), rs.getString("idempotency_key"))).list();
     }
+    @Override public List<StoreRef> listActiveStores() {
+        return jdbc.sql("SELECT id, public_id, store_no, name, status FROM core_store WHERE status='ACTIVE' ORDER BY store_no")
+                .query((rs, row) -> new StoreRef(rs.getLong("id"), rs.getString("public_id"), rs.getString("store_no"),
+                        rs.getString("name"), rs.getString("status"))).list();
+    }
     @Override public StoreRef findStore(String publicId) {
-        return jdbc.sql("SELECT id, public_id, name, status FROM core_store WHERE public_id = :id")
+        return jdbc.sql("SELECT id, public_id, store_no, name, status FROM core_store WHERE public_id = :id")
                 .param("id", publicId).query((rs, row) -> new StoreRef(rs.getLong("id"), rs.getString("public_id"),
-                        rs.getString("name"), rs.getString("status"))).optional().orElse(null);
+                        rs.getString("store_no"), rs.getString("name"), rs.getString("status"))).optional().orElse(null);
     }
     @Override public AssignmentView assign(String moduleCode, String storePublicId, String key, long actor, String trace) {
         return transactions.execute(status -> {
@@ -133,4 +154,19 @@ public class JdbcTenantModuleRepository implements TenantModuleRepository {
                 .param("details", "{\"moduleCode\":\"" + module + "\"}")
                 .param("now", Timestamp.from(clock.instant())).update();
     }
+    private static String effectiveState(String status, java.time.Instant starts, java.time.Instant expires,
+            boolean perpetual, boolean enabled, LicenseAnchor snapshot, java.time.Instant now) {
+        if (snapshot == null) return "UNLICENSED";
+        if (!"ACTIVE".equals(snapshot.instanceStatus())) return "SUSPENDED";
+        if (!"ACTIVE".equals(status)) return "UNLICENSED";
+        if (now.isBefore(starts)) return "PENDING";
+        if (now.isAfter(snapshot.lastSync().plus(snapshot.offlineGraceDays(), java.time.temporal.ChronoUnit.DAYS)))
+            return "OFFLINE_READ_ONLY";
+        if (!perpetual && expires != null && now.isAfter(expires.plus(3, java.time.temporal.ChronoUnit.DAYS)))
+            return "READ_ONLY";
+        if (!perpetual && expires != null && now.isAfter(expires)) return "WIND_DOWN";
+        if (!enabled) return "DISABLED";
+        return "ACTIVE";
+    }
+    private record LicenseAnchor(long version, int offlineGraceDays, java.time.Instant lastSync, String instanceStatus) {}
 }
