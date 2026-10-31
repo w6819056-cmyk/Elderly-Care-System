@@ -63,6 +63,18 @@ class TenantLicenseRepositoryTest {
                 .query(String.class).list()).containsExactly("community");
     }
 
+    @Test
+    void recordsExplicitPlatformSuspensionWithoutAdvancingSuccessfulSyncTime() {
+        Fixture fixture = fixture();
+        fixture.repository().accept(snapshot(1, "a".repeat(64), List.of(grant("institution"))));
+
+        fixture.repository().markPlatformStatus("SUSPENDED");
+
+        assertThat(fixture.repository().currentStatus().instanceStatus()).isEqualTo("SUSPENDED");
+        assertThat(fixture.jdbc().sql("SELECT last_successful_sync_at FROM lic_license_snapshot WHERE id = 1")
+                .query(java.sql.Timestamp.class).single().toInstant()).isEqualTo(NOW);
+    }
+
     private static Fixture fixture() {
         var dataSource = new DriverManagerDataSource(
                 "jdbc:h2:mem:lic_" + UUID.randomUUID().toString().replace("-", "")

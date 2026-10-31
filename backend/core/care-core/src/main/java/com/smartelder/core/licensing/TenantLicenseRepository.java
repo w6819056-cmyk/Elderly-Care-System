@@ -9,6 +9,8 @@ public interface TenantLicenseRepository {
 
     LicenseStatus currentStatus();
 
+    void markPlatformStatus(String status);
+
     record VerifiedLicenseSnapshot(
             String orgNo,
             String deploymentInstanceId,

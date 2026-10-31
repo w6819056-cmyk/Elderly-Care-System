@@ -36,6 +36,10 @@
         </dependency>
         <dependency>
             <groupId>com.smartelder</groupId>
+            <artifactId>platform-licensing</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.smartelder</groupId>
             <artifactId>care-core</artifactId>
         </dependency>
         <dependency>

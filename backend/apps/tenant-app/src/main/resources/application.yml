@@ -46,6 +46,20 @@ app:
     owner-account: ${TENANT_OWNER_ACCOUNT:}
     owner-display-name: ${TENANT_OWNER_DISPLAY_NAME:}
     owner-password: ${TENANT_OWNER_PASSWORD:}
+  license:
+    enabled: ${PLATFORM_LICENSE_ENABLED:false}
+    heartbeat-interval-ms: ${PLATFORM_LICENSE_HEARTBEAT_INTERVAL_MS:21600000}
+    retry-poll-ms: ${PLATFORM_LICENSE_RETRY_POLL_MS:60000}
+    platform-base-url: ${PLATFORM_LICENSE_BASE_URL:}
+    org-no: ${TENANT_ORG_NO:}
+    instance-public-id: ${PLATFORM_INSTANCE_PUBLIC_ID:}
+    instance-fingerprint: ${PLATFORM_INSTANCE_FINGERPRINT:}
+    instance-private-key-pem: ${PLATFORM_INSTANCE_PRIVATE_KEY_PEM:}
+    activation-code: ${PLATFORM_ACTIVATION_CODE:}
+    installation-id: ${PLATFORM_INSTALLATION_ID:}
+    tenant-database-id: ${PLATFORM_TENANT_DATABASE_ID:}
+    trusted-keys:
+      ${PLATFORM_LICENSE_KEY_ID:license-key-local}: ${PLATFORM_LICENSE_PUBLIC_KEY:}
 
 springdoc:
   swagger-ui:

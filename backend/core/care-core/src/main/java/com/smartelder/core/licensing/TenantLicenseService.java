@@ -19,4 +19,8 @@ public class TenantLicenseService {
     public TenantLicenseRepository.LicenseStatus currentStatus() {
         return repository.currentStatus();
     }
+
+    public void markPlatformStatus(String status) {
+        repository.markPlatformStatus(status);
+    }
 }

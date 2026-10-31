@@ -182,6 +182,20 @@ public class JdbcTenantLicenseRepository implements TenantLicenseRepository {
                 .optional().orElse(null);
     }
 
+    @Override
+    public void markPlatformStatus(String status) {
+        if (!"SUSPENDED".equals(status) && !"REVOKED".equals(status)) {
+            throw new IllegalArgumentException("unsupported platform instance status");
+        }
+        jdbc.sql("""
+                        UPDATE lic_license_snapshot
+                        SET platform_instance_status = :status, sync_status = 'CONTROL_SUSPENDED',
+                            version = version + 1
+                        WHERE id = 1
+                        """)
+                .param("status", status).update();
+    }
+
     private List<ModuleGrant> listModules() {
         return jdbc.sql("""
                         SELECT module_code, license_type, status, starts_at, expires_at,
