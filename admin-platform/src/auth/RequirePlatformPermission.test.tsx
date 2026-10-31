@@ -15,7 +15,7 @@ describe('platform permission route guard', () => {
   })
 
   it('denies a direct route when the current server principal lacks its permission', async () => {
-    render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    render(<MemoryRouter>
       <AuthProvider><RequirePlatformPermission permission="platform.enterprise.view"><p>企业功能</p></RequirePlatformPermission></AuthProvider>
     </MemoryRouter>)
     expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument()
