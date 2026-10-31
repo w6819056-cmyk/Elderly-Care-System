@@ -1,6 +1,7 @@
 package com.smartelder.core.organization;
 
 import java.util.List;
+import java.util.Set;
 
 public interface TenantOrganizationRepository {
 
@@ -19,4 +20,8 @@ public interface TenantOrganizationRepository {
             String publicId, String status, long expectedVersion, long actorId, String traceId);
 
     List<TenantOrganizationService.StoreView> listStores();
+
+    List<TenantOrganizationService.StoreView> listStores(Set<Long> storeIds);
+
+    Long findStoreId(String publicId);
 }

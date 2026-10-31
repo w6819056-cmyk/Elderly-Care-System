@@ -112,5 +112,18 @@ class TenantOrganizationServiceTest {
         public List<TenantOrganizationService.StoreView> listStores() {
             return List.copyOf(stores);
         }
+
+        @Override
+        public List<TenantOrganizationService.StoreView> listStores(Set<Long> storeIds) {
+            return stores.stream().filter(store -> storeIds.contains((long) stores.indexOf(store) + 1)).toList();
+        }
+
+        @Override
+        public Long findStoreId(String publicId) {
+            for (int i = 0; i < stores.size(); i++) {
+                if (stores.get(i).publicId().equals(publicId)) return (long) i + 1;
+            }
+            return null;
+        }
     }
 }

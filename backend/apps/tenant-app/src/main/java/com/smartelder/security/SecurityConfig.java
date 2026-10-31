@@ -1,6 +1,9 @@
 package com.smartelder.security;
 
 import com.smartelder.api.tenant.auth.TenantStaffJwtFilter;
+import com.smartelder.common.ApiResponse;
+import com.smartelder.common.ErrorCode;
+import com.smartelder.common.TraceIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.common.Result;
 import java.util.List;
@@ -46,18 +49,26 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(eh -> eh
-                        .authenticationEntryPoint((req, res, ex) -> write(res, HttpStatus.UNAUTHORIZED, "未登录或登录已过期"))
-                        .accessDeniedHandler((req, res, ex) -> write(res, HttpStatus.FORBIDDEN, "无权限执行该操作")))
+                        .authenticationEntryPoint((req, res, ex) -> write(req, res, HttpStatus.UNAUTHORIZED, "未登录或登录已过期"))
+                        .accessDeniedHandler((req, res, ex) -> write(req, res, HttpStatus.FORBIDDEN, "无权限执行该操作")))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(tenantStaffJwtFilter, JwtAuthFilter.class);
         return http.build();
     }
 
-    private void write(jakarta.servlet.http.HttpServletResponse res, HttpStatus status, String msg) throws java.io.IOException {
+    private void write(jakarta.servlet.http.HttpServletRequest req, jakarta.servlet.http.HttpServletResponse res,
+                       HttpStatus status, String msg) throws java.io.IOException {
         res.setStatus(status.value());
         res.setContentType(MediaType.APPLICATION_JSON_VALUE);
         res.setCharacterEncoding("UTF-8");
-        objectMapper.writeValue(res.getWriter(), Result.fail(status.value(), msg));
+        if (req.getRequestURI().startsWith("/api/tenant/v1/")) {
+            String code = status == HttpStatus.UNAUTHORIZED ? ErrorCode.UNAUTHORIZED.code() : ErrorCode.PERMISSION_DENIED.code();
+            Object trace = req.getAttribute(TraceIdFilter.ATTRIBUTE_NAME);
+            objectMapper.writeValue(res.getWriter(), ApiResponse.error(ErrorCode.valueOf(code), msg,
+                    trace == null ? "tr_unknown" : trace.toString(), java.time.Clock.systemUTC()));
+        } else {
+            objectMapper.writeValue(res.getWriter(), Result.fail(status.value(), msg));
+        }
     }
 
     @Bean

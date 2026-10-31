@@ -9,7 +9,7 @@
 
 > 工程正在迁移为模块化多企业 SaaS 架构。现有单租户程序已迁入
 > `backend/apps/tenant-app`，平台控制面位于 `backend/apps/platform-app`。
-> 阶段 1 本地验收记录见 `docs/阶段1验收记录.md`，后续边界以 `docs/superpowers/plans/` 中对应阶段计划为准。
+> 阶段 1 本地验收记录见 `docs/阶段1验收记录.md`；阶段 2A 企业组织与权限底座已本地验收，记录见 `docs/阶段2A验收记录.md`。阶段 2B 模块授权守卫仍待实施。
 
 
 ## 一期交付范围

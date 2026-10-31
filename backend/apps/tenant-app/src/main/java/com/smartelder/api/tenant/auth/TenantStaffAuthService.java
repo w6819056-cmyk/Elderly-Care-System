@@ -1,5 +1,6 @@
 package com.smartelder.api.tenant.auth;
 
+import com.smartelder.core.iam.TenantAccessResolver;
 import java.time.Instant;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -14,12 +15,15 @@ public class TenantStaffAuthService {
     private final JdbcClient jdbc;
     private final PasswordEncoder passwordEncoder;
     private final TenantStaffTokenService tokenService;
+    private final TenantAccessResolver accessResolver;
 
     public TenantStaffAuthService(
-            JdbcClient jdbc, PasswordEncoder passwordEncoder, TenantStaffTokenService tokenService) {
+            JdbcClient jdbc, PasswordEncoder passwordEncoder, TenantStaffTokenService tokenService,
+            TenantAccessResolver accessResolver) {
         this.jdbc = jdbc;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
+        this.accessResolver = accessResolver;
     }
 
     public LoginResult login(String account, String password) {
@@ -60,12 +64,12 @@ public class TenantStaffAuthService {
         return principal(staff);
     }
 
-    private static TenantStaffPrincipal principal(StaffRow staff) {
+    private TenantStaffPrincipal principal(StaffRow staff) {
         if (!"HQ".equals(staff.staffType()) && !"STORE".equals(staff.staffType())) throw invalidToken();
         if ("STORE".equals(staff.staffType()) && staff.homeStoreId() == null) throw invalidToken();
         if ("HQ".equals(staff.staffType()) && staff.homeStoreId() != null) throw invalidToken();
-        return new TenantStaffPrincipal(staff.id(), staff.publicId(), staff.username(),
-                staff.staffType(), staff.homeStoreId());
+        return new TenantStaffPrincipal(staff.id(), staff.publicId(), staff.username(), staff.staffType(),
+                staff.homeStoreId(), accessResolver.resolve(staff.id()));
     }
 
     private static TenantStaffAuthException invalidCredentials() {

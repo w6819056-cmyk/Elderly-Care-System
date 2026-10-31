@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.util.List;
+import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -81,6 +82,20 @@ public class JdbcTenantOrganizationRepository implements TenantOrganizationRepos
     public List<StoreView> listStores() {
         return jdbc.sql("SELECT public_id, store_no, name, status, version FROM core_store ORDER BY store_no")
                 .query(JdbcTenantOrganizationRepository::storeRow).list();
+    }
+
+    @Override
+    public List<StoreView> listStores(Set<Long> storeIds) {
+        if (storeIds.isEmpty()) return List.of();
+        return jdbc.sql("SELECT public_id, store_no, name, status, version FROM core_store "
+                        + "WHERE id IN (:storeIds) ORDER BY store_no")
+                .param("storeIds", storeIds).query(JdbcTenantOrganizationRepository::storeRow).list();
+    }
+
+    @Override
+    public Long findStoreId(String publicId) {
+        return jdbc.sql("SELECT id FROM core_store WHERE public_id = :publicId")
+                .param("publicId", publicId).query(Long.class).optional().orElse(null);
     }
 
     private void audit(long actorId, String action, String targetType, String publicId, String traceId) {

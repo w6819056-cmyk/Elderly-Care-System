@@ -35,6 +35,7 @@ public class TenantOrganizationService {
     public EnterpriseView updateEnterprise(
             UpdateEnterpriseCommand command, TenantAccessContext actor, String traceId) {
         requirePermission(actor, "core.enterprise.manage");
+        requireAllStoreScope(actor);
         validateRequired(command.name(), "name");
         EnterpriseView current = repository.findEnterprise();
         if (current == null) throw new OrganizationException("NOT_FOUND", "enterprise profile not initialized");
@@ -46,12 +47,14 @@ public class TenantOrganizationService {
     @Transactional(readOnly = true)
     public List<StoreView> listStores(TenantAccessContext actor) {
         requirePermission(actor, "core.store.view");
-        return repository.listStores();
+        if ("ALL".equals(actor.dataScope().type())) return repository.listStores();
+        return repository.listStores(actor.dataScope().storeIds());
     }
 
     @Transactional
     public StoreView createStore(CreateStoreCommand command, TenantAccessContext actor, String traceId) {
         requirePermission(actor, "core.store.manage");
+        requireAllStoreScope(actor);
         validateRequired(command.storeNo(), "storeNo");
         validateRequired(command.name(), "name");
         try {
@@ -67,6 +70,10 @@ public class TenantOrganizationService {
         requirePermission(actor, "core.store.manage");
         StoreView current = repository.findStore(publicId);
         if (current == null) throw new OrganizationException("NOT_FOUND", "store not found");
+        Long storeId = repository.findStoreId(publicId);
+        if (!"ALL".equals(actor.dataScope().type()) && !actor.dataScope().storeIds().contains(storeId)) {
+            throw new OrganizationException("DATA_SCOPE_DENIED", "store is outside the current data scope");
+        }
         if (!STORE_TRANSITIONS.getOrDefault(current.status(), Set.of()).contains(targetStatus)) {
             throw new OrganizationException("BUSINESS_RULE_VIOLATION", "invalid store status transition");
         }
@@ -77,8 +84,14 @@ public class TenantOrganizationService {
     }
 
     private static void requirePermission(TenantAccessContext actor, String permission) {
-        if (actor == null || !actor.permissionCodes().contains(permission)) {
+        if (actor == null || !"HQ".equals(actor.staffType()) || !actor.permissionCodes().contains(permission)) {
             throw new OrganizationException("PERMISSION_DENIED", "missing permission: " + permission);
+        }
+    }
+
+    private static void requireAllStoreScope(TenantAccessContext actor) {
+        if (!"ALL".equals(actor.dataScope().type())) {
+            throw new OrganizationException("DATA_SCOPE_DENIED", "operation requires all-store data scope");
         }
     }
 

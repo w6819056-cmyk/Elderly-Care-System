@@ -16,7 +16,7 @@ class TenantMigrationTest {
             "iam_permission_group", "iam_permission_group_item", "iam_role",
             "iam_role_permission_group", "iam_role_permission", "iam_staff_role",
             "iam_staff_store_scope", "iam_store_group", "iam_store_group_member",
-            "audit_tenant_log");
+            "audit_tenant_log", "iam_staff_scope_config", "iam_staff_store_group_scope");
 
     @Test
     void migratesEmptyTenantDatabaseAndSeedsUniqueCorePermissions() {
@@ -38,7 +38,7 @@ class TenantMigrationTest {
         assertThat(actualTables).containsAll(REQUIRED_TABLES);
         assertThat(jdbc.queryForObject(
                 "SELECT version FROM flyway_schema_history WHERE success = TRUE ORDER BY installed_rank DESC LIMIT 1",
-                String.class)).isEqualTo("1");
+                String.class)).isEqualTo("2");
 
         Integer count = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM iam_permission_definition WHERE permission_code IN "
