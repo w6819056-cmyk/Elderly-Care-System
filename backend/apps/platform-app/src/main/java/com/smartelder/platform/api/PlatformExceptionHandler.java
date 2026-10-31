@@ -57,6 +57,14 @@ public class PlatformExceptionHandler {
         return error(ErrorCode.INVALID_REQUEST, message, request);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        return error(ErrorCode.INTERNAL_ERROR, null, request);
+    }
+
     private ResponseEntity<ApiResponse<Void>> error(
             ErrorCode code,
             String message,

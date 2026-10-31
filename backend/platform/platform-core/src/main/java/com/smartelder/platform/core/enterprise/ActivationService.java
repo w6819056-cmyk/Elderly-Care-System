@@ -254,6 +254,16 @@ public class ActivationService {
                         + "\",\"licenseVersion\":1}",
                 traceId
         );
+        auditService.record(
+                null,
+                "SYSTEM",
+                "LICENSE_ISSUED",
+                "DEPLOYMENT_INSTANCE",
+                instancePublicId,
+                "{\"licenseId\":\"" + license.publicId()
+                        + "\",\"version\":" + license.version() + "}",
+                traceId
+        );
         return new ActivatedInstance(
                 instancePublicId,
                 enterprisePublicId,

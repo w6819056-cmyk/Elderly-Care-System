@@ -1,6 +1,7 @@
 package com.smartelder.platform.core.commerce;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
 import com.smartelder.platform.core.common.PublicIds;
 import com.smartelder.platform.licensing.LicenseCanonicalizer;
@@ -30,6 +31,7 @@ public class LicenseIssueService {
     private final ObjectMapper objectMapper;
     private final LicenseSigner licenseSigner;
     private final PlatformClock clock;
+    private final PlatformAuditService auditService;
     private final TransactionTemplate transactionTemplate;
 
     public LicenseIssueService(
@@ -37,12 +39,14 @@ public class LicenseIssueService {
             ObjectMapper objectMapper,
             LicenseSigner licenseSigner,
             PlatformClock clock,
+            PlatformAuditService auditService,
             PlatformTransactionManager transactionManager
     ) {
         this.jdbcClient = Objects.requireNonNull(jdbcClient, "jdbcClient must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.licenseSigner = Objects.requireNonNull(licenseSigner, "licenseSigner must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
         this.transactionTemplate = new TransactionTemplate(
                 Objects.requireNonNull(transactionManager, "transactionManager must not be null")
         );
@@ -51,12 +55,12 @@ public class LicenseIssueService {
     public IssuedLicense issueForInstance(long instanceId, String traceId) {
         Objects.requireNonNull(traceId, "traceId must not be null");
         return Objects.requireNonNull(
-                transactionTemplate.execute(status -> issueInTransaction(instanceId)),
+                transactionTemplate.execute(status -> issueInTransaction(instanceId, traceId)),
                 "license issuance must return a result"
         );
     }
 
-    private IssuedLicense issueInTransaction(long instanceId) {
+    private IssuedLicense issueInTransaction(long instanceId, String traceId) {
         InstanceRow instance = lockInstance(instanceId);
         EnterpriseRow enterprise = findEnterprise(instance.enterpriseId());
         Instant now = clock.now();
@@ -115,6 +119,15 @@ public class LicenseIssueService {
         }
 
         writeRefreshRequested(instance.publicId(), nextVersion);
+        auditService.record(
+                null,
+                "SYSTEM",
+                "LICENSE_ISSUED",
+                "DEPLOYMENT_INSTANCE",
+                instance.publicId(),
+                "{\"licenseId\":\"" + licenseId + "\",\"version\":" + nextVersion + "}",
+                traceId
+        );
 
         return new IssuedLicense(
                 nextVersion,
@@ -129,6 +142,15 @@ public class LicenseIssueService {
         transactionTemplate.executeWithoutResult(status -> {
             InstanceRow instance = lockInstance(instanceId);
             writeRefreshRequested(instance.publicId(), instance.licenseVersion());
+            auditService.record(
+                    null,
+                    "SYSTEM",
+                    "LICENSE_REFRESH_REQUESTED",
+                    "DEPLOYMENT_INSTANCE",
+                    instance.publicId(),
+                    "{\"version\":" + instance.licenseVersion() + "}",
+                    traceId
+            );
         });
     }
 

@@ -111,6 +111,10 @@ class HeartbeatLicenseIntegrationTest {
                 SELECT COUNT(*) FROM pf_license
                 WHERE instance_id = (SELECT id FROM pf_deployment_instance WHERE public_id = :id)
                 """, activated.instancePublicId())).isEqualTo(1);
+        assertThat(count("""
+                SELECT COUNT(*) FROM pf_audit_log
+                WHERE action = 'LICENSE_ISSUED' AND target_public_id = :id
+                """, activated.instancePublicId())).isEqualTo(1);
     }
 
     @Test

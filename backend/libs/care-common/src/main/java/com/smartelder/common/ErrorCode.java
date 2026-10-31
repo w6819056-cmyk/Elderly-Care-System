@@ -5,6 +5,7 @@ public enum ErrorCode {
     INVALID_REQUEST("INVALID_REQUEST", "请求参数错误", 400),
     UNAUTHORIZED("UNAUTHORIZED", "未登录或登录已失效", 401),
     TOKEN_INVALID("TOKEN_INVALID", "登录凭证无效", 401),
+    TOKEN_EXPIRED("TOKEN_EXPIRED", "登录凭证已过期", 401),
     FORBIDDEN("FORBIDDEN", "无权执行该操作", 403),
     PERMISSION_DENIED("PERMISSION_DENIED", "无权限执行该操作", 403),
     NOT_FOUND("NOT_FOUND", "资源不存在", 404),

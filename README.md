@@ -9,7 +9,7 @@
 
 > 工程正在迁移为模块化多企业 SaaS 架构。现有单租户程序已迁入
 > `backend/apps/tenant-app`，平台控制面位于 `backend/apps/platform-app`。
-> 实施边界以 `docs/superpowers/plans/2026-10-30-phase-0-backend-foundation.md` 为准。
+> 阶段 1 本地验收记录见 `docs/阶段1验收记录.md`，后续边界以 `docs/superpowers/plans/` 中对应阶段计划为准。
 
 
 ## 一期交付范围
@@ -51,6 +51,8 @@ java -jar E:\yanglao\backend\apps\tenant-app\target\tenant-app-2.0.0-SNAPSHOT.ja
 - 接口文档：http://localhost:8082/swagger-ui.html
 - 平台控制面：http://localhost:8081/api/platform/v1/health
 - `dev` profile 会自动建表并写入演示数据；生产环境请去掉该 profile 并设置 `APP_JWT_SECRET`。
+
+平台控制面使用独立配置：设置 `PLATFORM_DB_URL`、`PLATFORM_DB_USERNAME`、`PLATFORM_DB_PASSWORD`、`PLATFORM_JWT_SECRET` 和 `PLATFORM_LICENSE_SIGNING_PRIVATE_KEY` 后启动 `platform-app`。接口清单、错误码和 Flyway 迁移说明见 `docs/platform/`；本地平台链路可用 `scripts/smoke-platform.ps1` 验证。
 
 ### 3. 管理端
 

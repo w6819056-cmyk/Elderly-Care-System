@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.common.ErrorCode;
 import com.smartelder.platform.core.common.PlatformApiException;
+import com.smartelder.platform.core.common.PlatformAuditService;
 import com.smartelder.platform.core.common.PlatformClock;
 import com.smartelder.platform.core.common.PlatformTestDatabase;
 import com.smartelder.platform.licensing.Ed25519LicenseSigner;
@@ -46,6 +47,7 @@ class EntitlementServiceTest {
                 objectMapper,
                 new Ed25519LicenseSigner("license-test-key", keyPair.privateKey()),
                 clock,
+                new PlatformAuditService(jdbc, clock),
                 database.transactionManager()
         );
         service = new EntitlementService(

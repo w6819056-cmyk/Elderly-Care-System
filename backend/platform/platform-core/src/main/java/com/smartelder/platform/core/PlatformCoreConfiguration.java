@@ -145,6 +145,7 @@ public class PlatformCoreConfiguration {
             ObjectMapper objectMapper,
             LicenseSigner licenseSigner,
             PlatformClock clock,
+            PlatformAuditService auditService,
             PlatformTransactionManager transactionManager
     ) {
         return new LicenseIssueService(
@@ -152,6 +153,7 @@ public class PlatformCoreConfiguration {
                 objectMapper,
                 licenseSigner,
                 clock,
+                auditService,
                 transactionManager
         );
     }

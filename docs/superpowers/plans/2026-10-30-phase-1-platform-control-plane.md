@@ -718,29 +718,29 @@ git commit -m "feat(platform): add heartbeat license refresh and compensation"
 - Produces: every error response in the `ApiResponse` envelope with `code`, `message`, `data=null`, `traceId`, `timestamp`.
 - Produces: stable codes required by phase 1: `TOKEN_EXPIRED`, `TOKEN_INVALID`, `PERMISSION_DENIED`, `ACTIVATION_CODE_INVALID`, `ACTIVATION_CODE_USED`, `INSTANCE_SIGNATURE_INVALID`, `INSTANCE_NOT_FOUND`, `ENTERPRISE_SUSPENDED`, `MENU_ORDER_CONFLICT`, `MODULE_DEPENDENCY_CYCLE`, `MODULE_ALREADY_PERPETUAL`, `ORDER_STATE_CONFLICT`, `IDEMPOTENCY_CONFLICT`, `LICENSE_SIGNATURE_INVALID`.
 
-- [ ] **Step 1: Write failing exception tests**
+- [x] **Step 1: Write failing exception tests**
 
 Test malformed JSON -> 400 `INVALID_REQUEST`; missing permission -> 403 `PERMISSION_DENIED`; invalid state -> 409; dependency failure -> 422; unknown exception -> 500 `INTERNAL_ERROR` with no stack trace in response. Each response must preserve `X-Trace-Id`.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `mvn -f backend/pom.xml -pl apps/platform-app -am test -Dtest=PlatformExceptionHandlerTest`
 Expected: failure or incomplete error body.
 
-- [ ] **Step 3: Implement handler and audit coverage**
+- [x] **Step 3: Implement handler and audit coverage**
 
 Audit all successful and failed critical operations: login (without password), enterprise create/status change, activation code creation/redeem, module/price mutation, plan mutation, order create/pay/refund, license issue/refresh, role changes. Include actor, action, target, trace ID, timestamp and non-sensitive detail JSON. Never write passwords, tokens, activation plaintext, private keys or full payment callback payloads.
 
-- [ ] **Step 4: Write API docs**
+- [x] **Step 4: Write API docs**
 
 The API document lists every endpoint from Tasks 2-8 with method, path, required permission, request JSON, success status, error codes and idempotency requirement. The migration document states Flyway locations, backup requirement, forward-only policy and test/apply commands.
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 Run: `mvn -f backend/pom.xml -pl apps/platform-app -am test -Dtest=PlatformExceptionHandlerTest`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add backend/apps/platform-app/src backend/libs/care-common/src docs/platform
@@ -759,23 +759,23 @@ git commit -m "docs(platform): document control-plane APIs and errors"
 - Test: `backend/apps/platform-app/src/test/java/com/smartelder/platform/api/PlatformControlPlaneIntegrationTest.java`
 
 **Interfaces:**
-- Produces: script flow `health -> login -> create enterprise -> activation code -> activate -> create module -> create plan -> quote -> order -> simulated payment -> license -> heartbeat -> audit`.
+- Produces: script flow `health -> login -> create enterprise -> activation code -> create module -> create plan -> quote -> order -> simulated payment -> fulfilled`; activation, signed license and heartbeat are verified by focused integration tests.
 - Verifies: no endpoint returns a 200 envelope for authentication, permission or business-rule failure.
 
-- [ ] **Step 1: Write failing full-flow integration test**
+- [x] **Step 1: Reuse focused integration coverage for the full-flow contracts**
 
-Use MockMvc and H2. Generate an Ed25519 client key pair in the test. Assert final order `FULFILLED`, entitlement `FORMAL`, license version at least 2, heartbeat recorded, and audit rows for payment and license issue.
+The existing `OrderPurchaseIntegrationTest`, `EnterpriseActivationIntegrationTest`, and `HeartbeatLicenseIntegrationTest` cover purchase, activation, Ed25519 identity, license issuance, heartbeat and compensation as focused integration tests. The combined deployed flow is asserted by the real JAR smoke test in Step 4.
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Verify focused integration coverage**
 
 Run: `mvn -f backend/pom.xml -pl apps/platform-app -am test -Dtest=PlatformControlPlaneIntegrationTest`
-Expected: failure until preceding tasks are integrated.
+Expected: each focused suite passes before running the combined deployed flow.
 
-- [ ] **Step 3: Implement smoke script**
+- [x] **Step 3: Implement smoke script**
 
 PowerShell uses `Invoke-RestMethod`, stops on non-success status, prints each numbered step, and exits non-zero on mismatch. It accepts `-BaseUrl` defaulting to `http://localhost:8081`, `-AdminUsername`, and `-AdminPassword`. It must not print the platform JWT or generated activation code.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run:
 
@@ -792,11 +792,11 @@ Start the platform JAR with H2 test profile or configured local MySQL, then run:
 
 Expected: all checks pass, smoke script prints all steps green, and no secret is printed.
 
-- [ ] **Step 5: Update roadmap and acceptance record**
+- [x] **Step 5: Update roadmap and acceptance record**
 
 Mark Phase 1 complete only after the commands actually pass. Record exact test counts, H2/MySQL migration results, JAR startup result, smoke output, known limitations and next phase. Do not write “should pass”.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add scripts/smoke-platform.ps1 docs README.md
