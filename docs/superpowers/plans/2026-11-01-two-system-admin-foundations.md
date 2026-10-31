@@ -117,7 +117,6 @@
 ## Task 4: Document Run and Deployment Boundaries
 
 **Files:**
-- Modify: `scripts/verify-all.ps1`
 - Modify: `README.md`
 - Modify: `docs/部署说明.md`
 
@@ -127,8 +126,8 @@
 - Document that the enterprise website/mini-program code belongs to the enterprise system project and uses the platform unified domain/AppID, while enterprise API/business data stays with the customer's tenant system.
 - Document that platform version publication does not execute customer-side commands; the tenant service validates signed artifacts and waits for HQ confirmation before a local upgrade.
 
-- [ ] **Step 1: Add the two dev/build commands and origin/API responsibilities** to the README and deployment guide.
-- [ ] **Step 2: Add an architecture checklist** verifying separate browser storage, no platform/tenant token sharing, no platform access to tenant business DB, and no remote shell deployment path.
+- [ ] **Step 1: Add the two dev/build commands and origin/API responsibilities** to the README and deployment guide; replace outdated single-app URLs only where they describe the new modular SaaS management consoles, and keep legacy workflow instructions clearly labeled.
+- [ ] **Step 2: Document the two system project boundary**: platform hosts its own console/API/control DB; customer hosts tenant console/API/business DB; brand website/mini program source belongs to the enterprise system project while public entry uses platform domain/AppID; platform versions are verified client-side and applied only after HQ confirmation.
 - [ ] **Step 3: Run `scripts/verify-all.ps1`** and confirm old app, both new apps, backend integration tests, and architecture tests pass together.
 - [ ] **Step 4: Inspect `git diff --check` and the final diff**; commit as `docs: document two-system admin builds and deployment`.
 
