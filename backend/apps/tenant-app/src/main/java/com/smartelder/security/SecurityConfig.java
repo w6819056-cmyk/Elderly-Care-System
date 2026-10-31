@@ -1,5 +1,6 @@
 package com.smartelder.security;
 
+import com.smartelder.api.tenant.auth.TenantStaffJwtFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.common.Result;
 import java.util.List;
@@ -10,8 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -23,16 +22,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    private final TenantStaffJwtFilter tenantStaffJwtFilter;
     private final ObjectMapper objectMapper;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, ObjectMapper objectMapper) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, TenantStaffJwtFilter tenantStaffJwtFilter,
+                          ObjectMapper objectMapper) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.tenantStaffJwtFilter = tenantStaffJwtFilter;
         this.objectMapper = objectMapper;
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     @Bean
@@ -42,6 +39,8 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(reg -> reg
+                        .requestMatchers("/api/tenant/v1/auth/login").permitAll()
+                        .requestMatchers("/api/tenant/v1/**").hasAuthority("TENANT_STAFF")
                         .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/actuator/health").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
@@ -49,7 +48,8 @@ public class SecurityConfig {
                 .exceptionHandling(eh -> eh
                         .authenticationEntryPoint((req, res, ex) -> write(res, HttpStatus.UNAUTHORIZED, "未登录或登录已过期"))
                         .accessDeniedHandler((req, res, ex) -> write(res, HttpStatus.FORBIDDEN, "无权限执行该操作")))
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(tenantStaffJwtFilter, JwtAuthFilter.class);
         return http.build();
     }
 

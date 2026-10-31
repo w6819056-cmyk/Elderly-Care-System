@@ -31,6 +31,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = header.substring(7);
             try {
                 Claims claims = jwtService.parse(token);
+                if (claims.getAudience() != null && claims.getAudience().contains("TENANT_STAFF")) {
+                    throw new IllegalArgumentException("tenant staff tokens are not legacy user tokens");
+                }
                 Long userId = Long.valueOf(claims.getSubject());
                 String role = claims.get("role", String.class);
                 Number orgIdNum = claims.get("orgId", Number.class);
