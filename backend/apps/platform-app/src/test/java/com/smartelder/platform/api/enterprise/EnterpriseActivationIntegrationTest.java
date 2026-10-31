@@ -83,7 +83,8 @@ class EnterpriseActivationIntegrationTest {
         String publicKeyPem = toPem("PUBLIC KEY", INSTANCE_KEY_PAIR.getPublic().getEncoded());
         Activation activation = activate(activationCode, publicKeyPem, "install-001", "tenant-db-001");
         assertThat(activation.licenseVersion()).isEqualTo(1);
-        assertThat(activation.license().path("schemaVersion").asInt()).isEqualTo(1);
+        assertThat(activation.license().path("schemaVersion").asInt()).isEqualTo(2);
+        assertThat(activation.license().path("version").asLong()).isEqualTo(activation.licenseVersion());
         assertThat(activation.license().path("signatureAlgorithm").asText()).isEqualTo("Ed25519");
         assertThat(verifyLicenseSignature(activation.license())).isTrue();
 

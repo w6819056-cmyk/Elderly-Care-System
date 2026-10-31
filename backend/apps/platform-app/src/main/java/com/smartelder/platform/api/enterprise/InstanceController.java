@@ -113,7 +113,7 @@ public class InstanceController {
             );
         }
         return ApiResponse.success(
-                licenseRefreshService.acknowledge(instance, body.version()),
+                licenseRefreshService.acknowledge(instance, body.version(), body.sha256()),
                 traceId,
                 clock
         );
@@ -171,6 +171,6 @@ public class InstanceController {
     ) {
     }
 
-    public record LicenseAcknowledgementRequest(@Min(1) long version) {
+    public record LicenseAcknowledgementRequest(@Min(1) long version, String sha256) {
     }
 }

@@ -28,5 +28,11 @@ public record LicenseModule(
         if (storeQuota < 0) {
             throw new IllegalArgumentException("module.storeQuota must not be negative");
         }
+        if (expiresAt != null && !expiresAt.isAfter(startsAt)) {
+            throw new IllegalArgumentException("module expiresAt must be after startsAt");
+        }
+        if (perpetual && expiresAt != null) {
+            throw new IllegalArgumentException("perpetual module must not have expiresAt");
+        }
     }
 }

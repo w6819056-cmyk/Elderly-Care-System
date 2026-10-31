@@ -1,11 +1,13 @@
 package com.smartelder.platform.licensing;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
 public record LicenseDocument(
         int schemaVersion,
+        long version,
         String licenseId,
         String orgNo,
         String deploymentInstanceId,
@@ -23,6 +25,9 @@ public record LicenseDocument(
         if (schemaVersion < 1) {
             throw new IllegalArgumentException("schemaVersion must be positive");
         }
+        if (schemaVersion >= 2 && version < 1) {
+            throw new IllegalArgumentException("version must be positive");
+        }
         requireText(licenseId, "licenseId");
         requireText(orgNo, "orgNo");
         requireText(deploymentInstanceId, "deploymentInstanceId");
@@ -34,11 +39,15 @@ public record LicenseDocument(
         }
         Objects.requireNonNull(heartbeat, "heartbeat must not be null");
         modules = List.copyOf(Objects.requireNonNull(modules, "modules must not be null"));
+        if (new HashSet<>(modules.stream().map(LicenseModule::code).toList()).size() != modules.size()) {
+            throw new IllegalArgumentException("duplicate module code");
+        }
     }
 
     public LicenseDocument withSignature(LicenseSignature newSignature) {
         return new LicenseDocument(
                 schemaVersion,
+                version,
                 licenseId,
                 orgNo,
                 deploymentInstanceId,
@@ -56,6 +65,7 @@ public record LicenseDocument(
     public LicenseDocument withOrgNo(String newOrgNo) {
         return new LicenseDocument(
                 schemaVersion,
+                version,
                 licenseId,
                 newOrgNo,
                 deploymentInstanceId,
@@ -73,6 +83,7 @@ public record LicenseDocument(
     public LicenseDocument withInstanceFingerprint(String newFingerprint) {
         return new LicenseDocument(
                 schemaVersion,
+                version,
                 licenseId,
                 orgNo,
                 deploymentInstanceId,
@@ -90,6 +101,7 @@ public record LicenseDocument(
     public LicenseDocument withModules(List<LicenseModule> newModules) {
         return new LicenseDocument(
                 schemaVersion,
+                version,
                 licenseId,
                 orgNo,
                 deploymentInstanceId,
@@ -100,6 +112,24 @@ public record LicenseDocument(
                 offlineGraceDays,
                 heartbeat,
                 newModules,
+                signature
+        );
+    }
+
+    public LicenseDocument withVersion(long newVersion) {
+        return new LicenseDocument(
+                schemaVersion,
+                newVersion,
+                licenseId,
+                orgNo,
+                deploymentInstanceId,
+                instanceFingerprint,
+                issuedAt,
+                notBefore,
+                expiresAt,
+                offlineGraceDays,
+                heartbeat,
+                modules,
                 signature
         );
     }

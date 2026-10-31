@@ -17,7 +17,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class LicenseSigningService {
 
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final int OFFLINE_GRACE_DAYS = 7;
 
     private final JdbcClient jdbcClient;
@@ -53,6 +53,7 @@ public class LicenseSigningService {
         String publicId = PublicIds.newId("lic");
         LicenseDocument unsigned = new LicenseDocument(
                 SCHEMA_VERSION,
+                1,
                 publicId,
                 orgNo,
                 instancePublicId,
@@ -106,6 +107,7 @@ public class LicenseSigningService {
                 1,
                 SCHEMA_VERSION,
                 payloadJson,
+                LicenseCanonicalizer.sha256(payloadJson),
                 signed.signature().value(),
                 licenseSigner.algorithm(),
                 licenseSigner.keyId(),
@@ -127,6 +129,7 @@ public class LicenseSigningService {
                         rs.getLong("version"),
                         rs.getInt("schema_version"),
                         rs.getString("payload_json"),
+                        LicenseCanonicalizer.sha256(rs.getString("payload_json")),
                         rs.getString("signature"),
                         licenseSigner.algorithm(),
                         licenseSigner.keyId(),
@@ -144,6 +147,7 @@ public class LicenseSigningService {
             long version,
             int schemaVersion,
             String payloadJson,
+            String sha256,
             String signature,
             String signatureAlgorithm,
             String keyId,

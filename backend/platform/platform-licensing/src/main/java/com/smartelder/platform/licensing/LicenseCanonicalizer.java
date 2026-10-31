@@ -3,6 +3,9 @@ package com.smartelder.platform.licensing;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,6 +23,9 @@ public final class LicenseCanonicalizer {
     public static String canonicalize(LicenseDocument document) {
         Map<String, Object> root = new TreeMap<>();
         root.put("schemaVersion", document.schemaVersion());
+        if (document.schemaVersion() >= 2) {
+            root.put("version", document.version());
+        }
         root.put("licenseId", document.licenseId());
         root.put("orgNo", document.orgNo());
         root.put("deploymentInstanceId", document.deploymentInstanceId());
@@ -35,6 +41,20 @@ public final class LicenseCanonicalizer {
             return OBJECT_MAPPER.writeValueAsString(root);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Failed to serialize canonical license payload", exception);
+        }
+    }
+
+    public static String sha256(LicenseDocument document) {
+        return sha256(canonicalize(document));
+    }
+
+    public static String sha256(String canonicalPayload) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonicalPayload.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 

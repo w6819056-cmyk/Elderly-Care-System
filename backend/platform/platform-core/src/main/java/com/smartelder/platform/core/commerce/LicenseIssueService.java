@@ -22,7 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 public class LicenseIssueService {
 
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     private static final int OFFLINE_GRACE_DAYS = 7;
     private static final LicenseDocument.HeartbeatPolicy HEARTBEAT_POLICY =
             new LicenseDocument.HeartbeatPolicy(6, 30);
@@ -70,6 +70,7 @@ public class LicenseIssueService {
 
         LicenseDocument unsigned = new LicenseDocument(
                 SCHEMA_VERSION,
+                nextVersion,
                 licenseId,
                 enterprise.orgNo(),
                 instance.publicId(),

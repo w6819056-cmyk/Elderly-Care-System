@@ -80,6 +80,7 @@ class HeartbeatLicenseIntegrationTest {
                 .andExpect(jsonPath("$.data.instanceStatus").value("ONLINE"))
                 .andExpect(jsonPath("$.data.licenseVersion").value(1))
                 .andExpect(jsonPath("$.data.licensePayload.version").value(1))
+                .andExpect(jsonPath("$.data.licensePayload.sha256").isString())
                 .andExpect(jsonPath("$.data.licensePayload.payloadJson").isString())
                 .andExpect(jsonPath("$.data.licensePayload.signature").isString())
                 .andExpect(jsonPath("$.data.nextHeartbeatAt").isString())
@@ -120,7 +121,8 @@ class HeartbeatLicenseIntegrationTest {
     @Test
     void acknowledgesLatestLicenseIdempotently() throws Exception {
         ActivatedInstance activated = activateInstance();
-        String body = objectMapper.writeValueAsString(Map.of("version", 1));
+        String digest = licenseDigest(activated.instancePublicId());
+        String body = objectMapper.writeValueAsString(Map.of("version", 1, "sha256", digest));
 
         SignedRequest firstRequest = signedRequest(
                 activated.instancePublicId(),
@@ -137,6 +139,7 @@ class HeartbeatLicenseIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.version").value(1))
+                .andExpect(jsonPath("$.data.sha256").value(digest))
                 .andExpect(jsonPath("$.data.acknowledgedAt").isString())
                 .andReturn();
         String firstAcknowledgedAt = objectMapper.readTree(
@@ -157,6 +160,7 @@ class HeartbeatLicenseIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.version").value(1))
+                .andExpect(jsonPath("$.data.sha256").value(digest))
                 .andExpect(jsonPath("$.data.acknowledgedAt").value(firstAcknowledgedAt));
 
         Timestamp acknowledgedAt = jdbcClient.sql("""
@@ -168,6 +172,35 @@ class HeartbeatLicenseIntegrationTest {
                 .query(Timestamp.class)
                 .single();
         assertThat(acknowledgedAt).isNotNull();
+    }
+
+    @Test
+    void rejectsAcknowledgementWithWrongLicenseDigest() throws Exception {
+        ActivatedInstance activated = activateInstance();
+        String body = objectMapper.writeValueAsString(Map.of("version", 1, "sha256", "0".repeat(64)));
+        SignedRequest request = signedRequest(
+                activated.instancePublicId(),
+                "POST",
+                "/api/platform/v1/instances/" + activated.instancePublicId() + "/ack-license",
+                body
+        );
+
+        mvc.perform(post("/api/platform/v1/instances/{publicId}/ack-license", activated.instancePublicId())
+                        .headers(request.headers())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        Timestamp acknowledgedAt = jdbcClient.sql("""
+                        SELECT acknowledged_at FROM pf_license
+                        WHERE instance_id = (SELECT id FROM pf_deployment_instance WHERE public_id = :id)
+                          AND version = 1
+                        """)
+                .param("id", activated.instancePublicId())
+                .query(Timestamp.class)
+                .single();
+        assertThat(acknowledgedAt).isNull();
     }
 
     @Test
@@ -497,6 +530,18 @@ class HeartbeatLicenseIntegrationTest {
                 .param("id", id)
                 .query(Long.class)
                 .single();
+    }
+
+    private String licenseDigest(String instancePublicId) throws Exception {
+        String payload = jdbcClient.sql("""
+                        SELECT payload_json FROM pf_license
+                        WHERE instance_id = (SELECT id FROM pf_deployment_instance WHERE public_id = :id)
+                          AND version = 1
+                        """)
+                .param("id", instancePublicId)
+                .query(String.class)
+                .single();
+        return sha256Hex(payload);
     }
 
     private long countForEnterpriseModule(String sql, String enterprisePublicId, long moduleId) {
