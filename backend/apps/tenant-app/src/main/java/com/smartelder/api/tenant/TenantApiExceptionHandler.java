@@ -5,6 +5,7 @@ import com.smartelder.common.ApiResponse;
 import com.smartelder.common.ErrorCode;
 import com.smartelder.common.TraceIdFilter;
 import com.smartelder.core.organization.OrganizationException;
+import com.smartelder.core.licensing.TenantModuleException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -32,6 +33,17 @@ public class TenantApiExceptionHandler {
             case "PERMISSION_DENIED", "DATA_SCOPE_DENIED" -> 403;
             case "NOT_FOUND" -> 404;
             case "VERSION_CONFLICT" -> 409;
+            default -> 422;
+        };
+        return response(status, ex.code(), ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(TenantModuleException.class)
+    public ResponseEntity<ApiResponse<Void>> module(TenantModuleException ex, HttpServletRequest request) {
+        int status = switch (ex.code()) {
+            case "PERMISSION_DENIED", "DATA_SCOPE_DENIED" -> 403;
+            case "NOT_FOUND" -> 404;
+            case "MODULE_QUOTA_EXCEEDED", "IDEMPOTENCY_KEY_CONFLICT" -> 409;
             default -> 422;
         };
         return response(status, ex.code(), ex.getMessage(), request);
