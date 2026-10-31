@@ -3,13 +3,15 @@
 按《综合智慧养老平台软件需求规格说明书》V1.0 实现的一期核心链路系统。
 
 - `backend/`　Spring Boot 3 + MyBatis-Plus 后端服务（Java 17）
-- `admin/`　　React 18 + TypeScript 管理端（机构/服务商端 + 平台运营端）
+- `admin-platform/`　React 18 + TypeScript 平台总管理端（独立构建，平台侧部署）
+- `admin-tenant/`　 React 18 + TypeScript 企业总部/门店管理端（独立构建，客户侧部署）
+- `admin/`　　　　旧版一期管理端（机构/服务商端 + 平台运营端，兼容演示与回归）
 - `miniprogram/`　微信小程序（老人端 + 家属端）
 - `docs/`　　　接口清单、需求追溯表、部署说明
 
 > 工程正在迁移为模块化多企业 SaaS 架构。现有单租户程序已迁入
 > `backend/apps/tenant-app`，平台控制面位于 `backend/apps/platform-app`。
-> 阶段 1 本地验收记录见 `docs/阶段1验收记录.md`；阶段 2A 企业组织与权限底座已本地验收，记录见 `docs/阶段2A验收记录.md`。阶段 2B 模块授权守卫仍待实施。
+> 新管理端为同仓库内两个独立构建、独立部署的系统：`admin-platform/` 由我们托管，`admin-tenant/` 随企业系统部署在客户侧。阶段 1 本地验收记录见 `docs/阶段1验收记录.md`；阶段 2A 企业组织与权限底座已本地验收，记录见 `docs/阶段2A验收记录.md`。
 
 
 ## 一期交付范围
@@ -27,7 +29,42 @@
 
 未纳入一期的部分（文档中标注二期/三期或占位）：视频探望（FM-02/FM-07）、兴趣社群与志愿互助（CM-04/CM-05）、真实微信支付与短信网关对接、真实 IoT 设备接入。代码中均留有扩展点，见 `docs/接口清单.md` 的"扩展点"章节。
 
-## 快速启动
+## 新管理端（双系统）
+
+平台管理端与企业租户管理端分别构建、发布。平台管理端连接平台控制面；企业管理端（总部/门店工作台）连接客户自己部署的租户服务。两个前端不共用登录会话。
+
+启动前分别准备平台 API（默认 `http://localhost:8081`）和租户 API（默认 `http://localhost:8082`）。两个开发服务器均将 `/api` 代理到对应 API：
+
+```powershell
+# 平台管理端，默认 http://localhost:5174
+npm --prefix admin-platform install
+npm --prefix admin-platform run dev
+
+# 企业总部/门店管理端，默认 http://localhost:5175
+npm --prefix admin-tenant install
+npm --prefix admin-tenant run dev
+```
+
+分别独立构建生产静态资源：
+
+```powershell
+npm --prefix admin-platform run build
+npm --prefix admin-tenant run build
+```
+
+产物分别位于 `admin-platform/dist/` 与 `admin-tenant/dist/`。部署时平台前端配置 `VITE_API_BASE_URL` 为平台 API 的正式地址；企业前端配置为该客户自己的租户 API 地址。该变量在构建时写入资源，正式地址由部署环境提供，不提交客户域名到仓库。开发代理默认值可通过各自 `.env.local` 中的 `VITE_API_BASE_URL` 覆盖。
+
+**部署职责边界：**平台管理端、平台 API 和平台控制数据库运行在我们管理的平台基础设施；企业总部/门店管理端、租户 API 和企业业务数据库由客户部署和维护在其侧。品牌网站及小程序源码属于企业系统项目，公开入口按既定方案使用平台统一域名/AppID；客户的 API 和业务数据仍留在客户租户系统。
+
+平台可以发布版本及签名更新包，但不会远程执行客户服务器命令。客户侧租户服务负责校验更新包签名与适用版本，并由企业总部管理员确认后，在客户侧执行本地升级。
+
+更多配置、反向代理和生产边界见 [部署说明](docs/部署说明.md)。
+
+## 旧版单体管理端快速启动（兼容流程）
+
+以下 `admin/` + 单一租户服务的流程用于旧版一期演示/回归，不代表新双系统管理端的部署方式。新开发管理端请使用上面的 `admin-platform/` 和 `admin-tenant/`。
+
+## 旧版单体项目快速启动
 
 ### 1. 数据库
 
@@ -54,7 +91,7 @@ java -jar E:\yanglao\backend\apps\tenant-app\target\tenant-app-2.0.0-SNAPSHOT.ja
 
 平台控制面使用独立配置：设置 `PLATFORM_DB_URL`、`PLATFORM_DB_USERNAME`、`PLATFORM_DB_PASSWORD`、`PLATFORM_JWT_SECRET` 和 `PLATFORM_LICENSE_SIGNING_PRIVATE_KEY` 后启动 `platform-app`。接口清单、错误码和 Flyway 迁移说明见 `docs/platform/`；本地平台链路可用 `scripts/smoke-platform.ps1` 验证。
 
-### 3. 管理端
+### 3. 旧版管理端（`admin/`，兼容演示）
 
 ```powershell
 Set-Location E:\yanglao\admin
