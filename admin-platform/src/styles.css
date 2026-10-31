@@ -1,11 +1,81 @@
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #20292e;
-  background: #f5f7f8;
+  color: #1d302e;
+  background: #f2f6f4;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  --ink: #1d302e;
+  --muted: #657773;
+  --line: #dce6e2;
+  --panel: #ffffff;
+  --green: #187866;
+  --green-dark: #123b35;
+  --red: #b74336;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--ink); background: #f2f6f4; font-size: 14px; }
 button, input { font: inherit; }
+button { cursor: pointer; }
+
+.platform-shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+.platform-sidebar { display: flex; flex-direction: column; padding: 22px 16px 16px; color: #dcebe6; background: var(--green-dark); }
+.platform-brand { display: flex; align-items: center; gap: 11px; min-height: 46px; padding: 0 8px; }
+.platform-brand strong, .platform-brand small { display: block; }
+.platform-brand strong { color: #fff; font-size: 14px; font-weight: 650; }
+.platform-brand small { margin-top: 4px; color: #a7c4bb; font-size: 11px; }
+.platform-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fff; background: #228e78; font-weight: 700; }
+.platform-sidebar nav { display: grid; gap: 4px; margin-top: 34px; }
+.platform-sidebar nav a { display: flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: 5px; color: #c9dcd5; text-decoration: none; }
+.platform-sidebar nav a:hover, .platform-sidebar nav a.active { color: #fff; background: #24564d; }
+.platform-sidebar-foot { margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid #31584f; color: #96b5ab; font-size: 11px; }
+.platform-main { min-width: 0; }
+.platform-topbar { display: flex; justify-content: space-between; align-items: center; min-height: 62px; padding: 0 28px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.platform-topbar > div:first-child { display: flex; align-items: center; gap: 10px; }
+.platform-breadcrumb, .platform-divider { color: var(--muted); }
+.platform-account { display: flex; align-items: center; gap: 10px; }
+.platform-account button { margin-left: 10px; padding: 6px 10px; border: 0; color: var(--green); background: transparent; }
+.platform-avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #155d50; background: #dcefe9; font-size: 12px; font-weight: 700; }
+.platform-content { max-width: 1280px; margin: 0 auto; padding: 30px 32px; }
+.platform-home > header { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+.platform-home h1 { margin: 0; font-size: 23px; font-weight: 650; }
+.eyebrow { margin: 0 0 8px; color: var(--green); font-size: 10px; font-weight: 700; }
+.service-indicator { display: inline-flex; align-items: center; gap: 8px; color: #4c7168; font-size: 12px; }
+.service-indicator i { width: 7px; height: 7px; border-radius: 50%; background: #32967b; }
+.home-rule { margin-top: 22px; border-top: 1px solid var(--line); }
+.identity-section { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--line); }
+.identity-section > div { display: grid; gap: 8px; }
+.field-label { color: var(--muted); font-size: 12px; }
+.identity-section strong { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.home-note { max-width: 760px; margin-top: 18px; color: var(--muted); line-height: 1.7; }
+
+.login-frame { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: #edf3f0; }
+.login-panel { width: min(100%, 420px); padding: 32px; border: 1px solid #dce6e2; border-radius: 7px; background: #fff; box-shadow: 0 12px 36px #1d302e0a; }
+.login-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+.login-heading p { margin: 0 0 5px; color: var(--green); font-size: 10px; font-weight: 700; }
+.login-heading h1 { margin: 0; font-size: 20px; }
+.login-panel form { display: grid; gap: 10px; }
+.login-panel label { margin-top: 8px; color: #455a55; font-size: 12px; }
+.login-panel input { width: 100%; height: 42px; padding: 0 11px; border: 1px solid #ccd9d4; border-radius: 4px; color: var(--ink); background: #fff; outline: none; }
+.login-panel input:focus { border-color: var(--green); box-shadow: 0 0 0 3px #1878661c; }
+.primary-action { min-height: 42px; margin-top: 14px; border: 0; border-radius: 4px; color: #fff; background: var(--green); font-weight: 600; }
+.primary-action:hover:not(:disabled) { background: #126858; }
+.primary-action:disabled { cursor: wait; opacity: .65; }
+.login-panel footer { margin-top: 24px; padding-top: 15px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.form-error { margin: 2px 0 0; color: var(--red); font-size: 12px; }
+.auth-state { display: grid; place-content: center; justify-items: start; gap: 10px; min-height: 100vh; padding: 24px; }
+.auth-state h1 { margin: 0; font-size: 20px; }
+.auth-state p { margin: 0; color: var(--muted); }
+.auth-state button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); background: #fff; }
+.auth-state a { color: var(--green); text-decoration: none; }
+
+@media (max-width: 720px) {
+  .platform-shell { grid-template-columns: 1fr; }
+  .platform-sidebar { padding: 12px 16px; }
+  .platform-brand { min-height: 38px; }
+  .platform-sidebar nav { display: flex; margin-top: 12px; }
+  .platform-sidebar-foot { display: none; }
+  .platform-topbar { min-height: 56px; padding: 0 16px; }
+  .platform-content { padding: 24px 18px; }
+  .identity-section { grid-template-columns: 1fr; gap: 17px; }
+}
