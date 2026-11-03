@@ -26,7 +26,9 @@ const moduleEntry = {
   licenseVersion: 2,
   storeQuota: 3,
   assignedStores: 0,
-  enabled: false
+  enabled: false,
+  installed: false,
+  installedVersion: null
 }
 
 describe('HQ module authorization page', () => {
@@ -50,6 +52,7 @@ describe('HQ module authorization page', () => {
     render(<MemoryRouter><AuthProvider><TenantModulesPage /></AuthProvider></MemoryRouter>)
 
     expect(await screen.findByText('会员运营')).toBeInTheDocument()
+    expect(screen.getByText('已授权，待安装')).toBeInTheDocument()
     expect(screen.getByText('0 / 3')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '启用模块' }))
     expect(fetch).toHaveBeenCalledWith('/api/tenant/v1/hq/modules/membership/activation', expect.objectContaining({
@@ -72,5 +75,20 @@ describe('HQ module authorization page', () => {
 
     expect(await screen.findByText('会员运营')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '启用模块' })).not.toBeInTheDocument()
+  })
+
+  it('shows the installed package version separately from license state', async () => {
+    const installedEntry = { ...moduleEntry, installed: true, installedVersion: '1.0.1' }
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const data = url.endsWith('/auth/me') ? principal
+        : url.endsWith('/hq/modules') ? [installedEntry]
+          : url.endsWith('/license/status') ? { licenseId: 'lic_1', version: 2, instanceStatus: 'ACTIVE', modules: [] }
+            : []
+      return new Response(JSON.stringify({ code: 'OK', message: 'success', data }), { status: 200 })
+    })
+    render(<MemoryRouter><AuthProvider><TenantModulesPage /></AuthProvider></MemoryRouter>)
+
+    expect(await screen.findByText('已安装 1.0.1')).toBeInTheDocument()
   })
 })

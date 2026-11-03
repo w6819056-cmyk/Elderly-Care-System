@@ -1,7 +1,7 @@
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
 import {cleanup,render,screen} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
-import ModuleInstallPage from './ModuleInstallPage'
+import ModuleInstallPage,{selectRecommendedPackages} from './ModuleInstallPage'
 const mocks=vi.hoisted(()=>({request:vi.fn(),permissions:[] as string[]}))
 vi.mock('../api/client',()=>({request:mocks.request}))
 vi.mock('../auth/AuthProvider',()=>({useTenantAuth:()=>({principal:{accessContext:{permissionCodes:mocks.permissions}}})}))
@@ -13,3 +13,12 @@ it('distinguishes confirmed plans from installed modules and hides writes from r
 it('shows real executor telemetry',async()=>{mocks.request.mockImplementation((path:string)=>Promise.resolve(path.endsWith('/configuration')?{instanceConfigured:true,trustedPublisherCount:1,coreVersion:'2',executorReady:true,executorMode:'WATCH',runtimeLoadedCount:3}:[]));render(<MemoryRouter><ModuleInstallPage/></MemoryRouter>);expect(await screen.findByText('执行模式：WATCH')).toBeInTheDocument();expect(screen.getByText('运行时已加载：3 个')).toBeInTheDocument()})
 it.each([['INSTALLING','正在安装'],['RESTART_PENDING','等待重启'],['ACTIVE','已安装'],['SUPERSEDED','已被替代'],['FAILED','安装失败'],['RECOVERY_REQUIRED','需要恢复处理']])('renders %s accurately',async(status,label)=>{mocks.request.mockImplementation((path:string)=>Promise.resolve(path.endsWith('/configuration')?{instanceConfigured:true,trustedPublisherCount:1,coreVersion:'2',executorReady:false}:[{publicId:'p',moduleCode:'probe',version:'1',sha256:'abc',status,createdAt:'2026-11-02',phase:'MIGRATE',errorMessage:'阶段详情',backupAvailable:true}]));render(<MemoryRouter><ModuleInstallPage/></MemoryRouter>);expect(await screen.findByText(label)).toBeInTheDocument();expect(screen.getByText('当前阶段：MIGRATE')).toBeInTheDocument();expect(screen.getByText('备份：可用')).toBeInTheDocument();if(status!=='ACTIVE')expect(screen.queryByText('已安装')).not.toBeInTheDocument()})
 it('retains existing plans when refresh fails',async()=>{mocks.request.mockImplementation((path:string)=>Promise.resolve(path.endsWith('/configuration')?{instanceConfigured:true,trustedPublisherCount:1,coreVersion:'2',executorReady:false}:[{publicId:'p',moduleCode:'retained-plan',version:'1',sha256:'abc',status:'FAILED',createdAt:'2026-11-02'}]));render(<MemoryRouter><ModuleInstallPage/></MemoryRouter>);await screen.findByText('安装失败');mocks.request.mockRejectedValue(new Error('网络不可用'));screen.getByRole('button',{name:'刷新'}).click();expect(await screen.findByText(/刷新失败：网络不可用/)).toBeInTheDocument();expect(screen.getByText('安装失败')).toBeInTheDocument()})
+it('selects the newest published package compatible with the enterprise core',()=>{
+ const packages=[
+  {moduleCode:'membership',name:'会员',version:'1.0.0',minCoreVersion:'1.0.0',status:'PUBLISHED',sha256:'old'},
+  {moduleCode:'membership',name:'会员',version:'1.2.0',minCoreVersion:'2.1.0',status:'PUBLISHED',sha256:'new'},
+  {moduleCode:'membership',name:'会员',version:'1.3.0',minCoreVersion:'2.0.0',status:'VERIFIED',sha256:'pending'},
+  {moduleCode:'community',name:'社区',version:'2.0.0',minCoreVersion:'2.0.0',status:'PUBLISHED',sha256:'community'}
+ ]
+ expect(selectRecommendedPackages(packages,'2.0.0').map(item=>item.version)).toEqual(['1.0.0','2.0.0'])
+})

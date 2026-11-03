@@ -67,6 +67,22 @@ class TenantIamIntegrationTest {
     }
 
     @Test
+    void headquartersCanReadOptionalCustomerModuleFeatures() throws Exception {
+        String token=createHqManagerToken();long staff=authService.resolveToken(token).accessContext().staffId();
+        jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) SELECT sr.role_id,d.id,'ALLOW' FROM iam_staff_role sr CROSS JOIN iam_permission_definition d WHERE sr.staff_id=:id AND d.permission_code IN ('core.customer.view','membership:member:read')")
+                .param("id",staff).update();
+        String username="module_customer_"+UUID.randomUUID().toString().substring(0,8);
+        var registered=mvc.perform(post("/api/public/customer/register").remoteAddress("10.30.5.2").contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(java.util.Map.of("username",username,"password","Customer-Test-2026!","displayName","模块客户"))))
+                .andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(registered.getResponse().getContentAsString()).path("data").path("profile").path("publicId").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/customers/{id}/module-features",id)
+                        .header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
     void customerBookingsSurviveLoginAndStayPrivate() throws Exception {
         String no=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",insertStore("ACTIVE")).query(String.class).single();
         String username="customer_"+UUID.randomUUID().toString().substring(0,8);

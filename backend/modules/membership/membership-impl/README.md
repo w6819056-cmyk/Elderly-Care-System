@@ -1,6 +1,6 @@
 # 独立会员模块
 仅依赖 host API；普通 thin JAR，禁止 Boot repackage。Spring 通过 Entry 返回显式 Bean 配置。
-包版本 1.0.0，底座 [2.1.0,3.0.0)。manifest-template 的摘要为占位，打包时重新计算，前端入口已声明为 frontend/main.js。迁移在 payload/migrations，MySQL/H2 MySQL模式。
+包版本 1.0.1，底座 [2.1.0,3.0.0)。新增总部客户详情会员摘要 provider，受客户数据范围及 membership:member:read 权限控制。`GET /api/tenant/v1/customers/{customerPublicId}/module-features` 会在总部客户详情中聚合此摘要；门店仍仅可通过客户主动出示编号执行 `/api/tenant/v1/modules/membership/lookup`。manifest-template 的摘要为占位，打包时重新计算，前端入口已声明为 frontend/main.js。迁移在 payload/migrations，MySQL/H2 MySQL模式。
 所有管理服务检查 HQ；门店仅 lookup；消费者 feature 由宿主传入认证客户 UUID。等级停用而不删除；会员唯一客户约束；改级行锁、版本检查和审计同事务。禁用等级不能新分配。
 接口前缀 /api/tenant/v1/modules/membership，成功统一 {code:"OK",data:...}。
 GET /levels -> [{id,name,rank,benefits,enabled,version}]；POST /levels / PUT /levels/{id} 输入 {name,rank,benefits,enabled,version}。

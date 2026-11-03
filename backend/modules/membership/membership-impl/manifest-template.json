@@ -4,7 +4,7 @@
   "module": {
     "code": "membership",
     "name": "会员管理",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "menuOrder": 30,
     "dependencies": [],
     "permissionCodes": [

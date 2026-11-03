@@ -62,6 +62,16 @@ public class CustomerManagementService {
                 .params(params).query((r,n)->new Booking(r.getString(1),r.getString(2),r.getString(3),r.getString(4),r.getString(5),r.getDate(6).toLocalDate(),r.getString(7),r.getString(8))).list();
         return new Detail(withStores(customer,scope),bookings);
     }
+    public void requireVisible(TenantAccessContext actor,String id) {
+        Scope scope=scope(actor);
+        if(!"HQ".equals(actor.staffType()))
+            throw new TenantStaffAuthException(403,"PERMISSION_DENIED","仅企业总部可查看客户模块摘要");
+        Map<String,Object> params=new HashMap<>(scope.params());params.put("id",id);
+        long count=jdbc.sql("SELECT COUNT(*) FROM customer_account c WHERE c.public_id=:id AND "+visible(scope))
+                .params(params).query(Long.class).single();
+        if(count!=1)
+            throw new TenantStaffAuthException(404,"CUSTOMER_NOT_FOUND","客户不存在或不在管理范围内");
+    }
     public record Store(String publicId,String storeNo,String name) {}
     public record Summary(String publicId,String username,String displayName,Instant createdAt,long bookingCount,List<Store> stores) {}
     public record Page(List<Summary> items,long total,int page,int size) {}

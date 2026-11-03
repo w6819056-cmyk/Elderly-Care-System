@@ -33,6 +33,7 @@ class HqModuleControllerIntegrationTest {
     @Autowired private TenantStaffAuthService auth;
     private final Set<String> createdModules = new java.util.HashSet<>();
     private final Set<String> createdStores = new java.util.HashSet<>();
+    private boolean createdLicenseSnapshot;
 
     @AfterEach
     void cleanup() {
@@ -43,7 +44,9 @@ class HqModuleControllerIntegrationTest {
         }
         for (String store : createdStores)
             jdbc.sql("DELETE FROM core_store WHERE public_id=:store").param("store", store).update();
+        if (createdLicenseSnapshot) jdbc.sql("DELETE FROM lic_license_snapshot WHERE id=1").update();
         createdModules.clear(); createdStores.clear();
+        createdLicenseSnapshot = false;
     }
 
     @Test
@@ -77,6 +80,42 @@ class HqModuleControllerIntegrationTest {
     }
 
     @Test
+    void authorizedButUninstalledModuleRemainsManageableAndIsNotExposedAsBusinessMenu() throws Exception {
+        String module = "community";
+        String store = UUID.randomUUID().toString();
+        String assignmentId = UUID.randomUUID().toString();
+        String idempotencyKey = "install-state-" + UUID.randomUUID();
+        createdModules.add(module);
+        createdStores.add(store);
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.sql("INSERT INTO core_store(public_id,store_no,name,status,created_at,updated_at) VALUES(:id,:no,'未安装模块测试门店','ACTIVE',:n,:n)")
+                .param("id", store).param("no", "S-" + store).param("n", now).update();
+        jdbc.sql("INSERT INTO lic_module_entitlement(module_code,license_type,status,starts_at,perpetual,store_quota,license_version,updated_at) "
+                + "VALUES(:module,'FORMAL','ACTIVE',:n,TRUE,1,1,:n)").param("module", module).param("n", now).update();
+        jdbc.sql("INSERT INTO core_enterprise_module(module_code,enabled,version,updated_at) VALUES(:module,TRUE,0,:n)")
+                .param("module", module).param("n", now).update();
+        long staffId = createHqStaff(Set.of("core.module.view", "core.module.manage", "community:service:read"));
+        jdbc.sql("INSERT INTO core_store_module_assignment(public_id,module_code,store_id,status,idempotency_key,assigned_by_staff_id,assigned_at) "
+                + "SELECT :publicId,:module,id,'ACTIVE',:key,:staff,:now FROM core_store WHERE public_id=:store")
+                .param("publicId", assignmentId).param("module", module).param("key", idempotencyKey)
+                .param("staff", staffId).param("now", now).param("store", store).update();
+        ensureActiveLicenseSnapshot(now);
+
+        mvc.perform(get("/api/tenant/v1/hq/modules").header("Authorization", "Bearer " + auth.login(usernameFor(staffId), "pw").accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.moduleCode=='community')].installed").value(false));
+
+        String token = auth.login(usernameFor(staffId), "pw").accessToken();
+        mvc.perform(get("/api/tenant/v1/modules/menus").param("storeId", Long.toString(storeId(store)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.moduleCode=='community')]").doesNotExist());
+        String catalogPermissionName = jdbc.sql("SELECT name FROM iam_permission_definition WHERE permission_code='community:service:read'")
+                .query(String.class).single();
+        org.assertj.core.api.Assertions.assertThat(catalogPermissionName).isEqualTo("社区居家模块权限（待安装）");
+    }
+
+    @Test
     void moduleManagementRequiresSpecificPermission() throws Exception {
         String token = createHqToken(Set.of("core.module.view"));
         mvc.perform(put("/api/tenant/v1/hq/modules/membership/activation")
@@ -86,6 +125,11 @@ class HqModuleControllerIntegrationTest {
     }
 
     private String createHqToken(Set<String> permissions) {
+        long staffId = createHqStaff(permissions);
+        return auth.login(usernameFor(staffId), "pw").accessToken();
+    }
+
+    private long createHqStaff(Set<String> permissions) {
         String publicId = UUID.randomUUID().toString();
         String username = "mod_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         Timestamp now = Timestamp.from(Instant.now());
@@ -109,6 +153,23 @@ class HqModuleControllerIntegrationTest {
             jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) VALUES(:role,:permission,'ALLOW')")
                     .param("role", roleId).param("permission", permissionId).update();
         }
-        return auth.login(username, "pw").accessToken();
+        return staffId;
+    }
+
+    private String usernameFor(long staffId) {
+        return jdbc.sql("SELECT username FROM iam_staff WHERE id=:id").param("id", staffId).query(String.class).single();
+    }
+
+    private long storeId(String publicId) {
+        return jdbc.sql("SELECT id FROM core_store WHERE public_id=:id").param("id", publicId).query(Long.class).single();
+    }
+
+    private void ensureActiveLicenseSnapshot(Timestamp now) {
+        long count = jdbc.sql("SELECT COUNT(*) FROM lic_license_snapshot WHERE id=1").query(Long.class).single();
+        if (count > 0) return;
+        jdbc.sql("INSERT INTO lic_license_snapshot(id,org_no,deployment_instance_id,instance_fingerprint,license_id,schema_version,license_version,raw_license_json,canonical_payload,sha256,signature_algorithm,key_id,signature_value,issued_at,not_before,offline_grace_days,heartbeat_interval_hours,last_platform_time,last_successful_sync_at,platform_instance_status,sync_status) "
+                        + "VALUES(1,'ORG','instance','fingerprint','license',2,1,'{}','{}',:sha,'Ed25519','test','test',:now,:now,7,6,:now,:now,'ACTIVE','OK')")
+                .param("sha", "0".repeat(64)).param("now", now).update();
+        createdLicenseSnapshot = true;
     }
 }

@@ -12,4 +12,3 @@ describe('store management',()=>{
  it('requires confirmation before status mutation',async()=>{const user=userEvent.setup();mocks.stores.mockResolvedValue([{publicId:'s1',storeNo:'S1',name:'中心店',status:'ACTIVE'}]);mocks.status.mockResolvedValue({});render(<TenantStoresPage/>);await screen.findByText('中心店');await user.click(screen.getByRole('button',{name:'停用'}));expect(mocks.status).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:'确认'}));await waitFor(()=>expect(mocks.status).toHaveBeenCalledWith('s1','SUSPENDED'))})
  it('hides writes for restricted data scope',async()=>{mocks.principal.accessContext.dataScope.type='STORES';render(<TenantStoresPage/>);await screen.findByText('当前没有门店');expect(screen.queryByRole('button',{name:'新建门店'})).not.toBeInTheDocument()})
 })
-

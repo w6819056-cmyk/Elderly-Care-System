@@ -14,7 +14,6 @@ import { RequireTenantWorkspace } from './auth/RequireTenantWorkspace'
 import { TenantMenuProvider } from './auth/TenantMenuProvider'
 import { RequireTenantModule, TenantModuleLayout } from './auth/RequireTenantModule'
 import TenantLayout from './components/TenantLayout'
-import { REGISTERED_MODULE_ROUTES } from './navigation'
 import ForbiddenPage from './pages/ForbiddenPage'
 import TenantHomePage from './pages/TenantHomePage'
 import TenantLoginPage from './pages/TenantLoginPage'
@@ -74,17 +73,11 @@ function TenantRoutes() {
       <Route path="/store" element={<RequireTenantWorkspace workspace="STORE"><TenantLayout workspace="STORE" /></RequireTenantWorkspace>}>
         <Route index element={<StoreDashboardPage />} />
         <Route path="customers" element={<RequireTenantWorkspace workspace="STORE" permission="core.customer.view"><CustomerManagementPage /></RequireTenantWorkspace>} />
-        {REGISTERED_MODULE_ROUTES.map(module => (
-          <Route key={module.route} path={module.route.slice(1)} element={<RequireTenantModule moduleCode={module.moduleCode} route={module.route} />} />
-        ))}
         <Route path="site" element={<RequireTenantWorkspace workspace="STORE" permission="core.site.view"><SiteContentPage /></RequireTenantWorkspace>} />
         <Route path="visits" element={<RequireTenantWorkspace workspace="STORE" permission="core.visit.view"><VisitBookingsPage /></RequireTenantWorkspace>} />
       </Route>
       <Route element={<TenantModuleLayout />}>
         <Route path="/modules/:moduleCode/*" element={<RequireTenantModule />} />
-        {REGISTERED_MODULE_ROUTES.map(module => (
-          <Route key={module.route} path={module.route} element={<RequireTenantModule moduleCode={module.moduleCode} route={module.route} />} />
-        ))}
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

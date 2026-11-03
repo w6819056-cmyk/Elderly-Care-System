@@ -20,6 +20,8 @@ export interface TenantModule {
   storeQuota: number
   assignedStores: number
   enabled: boolean
+  installed: boolean
+  installedVersion: string | null
 }
 
 export interface TenantStoreOption {

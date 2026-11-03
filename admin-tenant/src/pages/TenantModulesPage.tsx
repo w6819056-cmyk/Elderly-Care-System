@@ -69,6 +69,7 @@ export default function TenantModulesPage() {
                 <span className={module.effectiveState === 'ACTIVE' ? 'state-tag is-active' : 'state-tag'}>{module.effectiveState}</span>
               </div>
               <dl className="module-facts">
+                <div><dt>程序安装</dt><dd>{module.installed ? `已安装 ${module.installedVersion}` : '已授权，待安装'}</dd></div>
                 <div><dt>授权来源</dt><dd>{LICENSE_LABELS[module.licenseType] ?? module.licenseType}</dd></div>
                 <div><dt>有效期</dt><dd>{module.perpetual ? '永久' : module.expiresAt ? new Date(module.expiresAt).toLocaleDateString() : '未设置'}</dd></div>
                 <div><dt>门店名额</dt><dd>{module.assignedStores} / {module.storeQuota}</dd></div>

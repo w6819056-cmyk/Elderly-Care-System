@@ -528,11 +528,12 @@ class OrderPurchaseIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].entitlementResult").value("APPLIED"));
         var days = jdbcClient.sql("""
-                SELECT starts_at, expires_at FROM pf_entitlement
+                SELECT starts_at, expires_at, status FROM pf_entitlement
                 WHERE source_order_id = (SELECT id FROM pf_subscription_order WHERE public_id = :id)
                 """).param("id", newOrder).query((rs, row) ->
-                java.time.Duration.between(rs.getTimestamp(1).toInstant(), rs.getTimestamp(2).toInstant()).toDays()).single();
-        assertThat(days).isEqualTo(365);
+                new Object[] {java.time.Duration.between(rs.getTimestamp(1).toInstant(), rs.getTimestamp(2).toInstant()).toDays(),rs.getString(3)}).single();
+        assertThat(days[0]).isEqualTo(365L);
+        assertThat(days[1]).isEqualTo("ACTIVE");
     }
 
     private String createAndFulfillOrder(String token, String enterpriseId, String moduleCode, String keyPrefix) throws Exception {

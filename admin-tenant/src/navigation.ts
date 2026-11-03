@@ -8,12 +8,6 @@ export interface TenantNavigationItem {
   moduleCode?: string
 }
 
-export const REGISTERED_MODULE_ROUTES = [
-  { moduleCode: 'membership', route: '/membership' },
-  { moduleCode: 'institution', route: '/institution' },
-  { moduleCode: 'community', route: '/community' }
-]
-
 export function isRuntimeModuleRoute(moduleCode: string, route: string): boolean {
   if (!/^[a-z][a-z0-9-]{1,31}$/.test(moduleCode)) return false
   if (/[\\%?#]/.test(route) || route.split('/').some(part => part === '.' || part === '..')) return false
@@ -21,10 +15,8 @@ export function isRuntimeModuleRoute(moduleCode: string, route: string): boolean
   return route === base || route.startsWith(base + '/')
 }
 
-export function filterRegisteredModuleMenus(menus: TenantModuleMenu[]): TenantModuleMenu[] {
-  return menus.filter(menu => isRuntimeModuleRoute(menu.moduleCode, menu.route) || REGISTERED_MODULE_ROUTES.some(
-    registered => registered.moduleCode === menu.moduleCode && registered.route === menu.route
-  ))
+export function filterRuntimeModuleMenus(menus: TenantModuleMenu[]): TenantModuleMenu[] {
+  return menus.filter(menu => isRuntimeModuleRoute(menu.moduleCode, menu.route))
 }
 
 export function buildTenantNavigation(
@@ -44,7 +36,7 @@ export function buildTenantNavigation(
     if (principal.accessContext.permissionCodes.includes('core.module.view')) {
       entries.push({ key: 'hq-modules', label: '模块授权', route: '/hq/modules' }); entries.push({key:'hq-module-install',label:'模块安装',route:'/hq/module-install'}); entries.push({key:'hq-shop',label:'模块购买',route:'/hq/shop'})
     }
-    entries.push(...filterRegisteredModuleMenus(moduleMenus).filter(menu => isRuntimeModuleRoute(menu.moduleCode, menu.route)).filter((menu, index, all) => all.findIndex(other => other.moduleCode === menu.moduleCode && other.route === menu.route) === index).map(menu => ({key: menu.key, label: menu.label, route: menu.route, moduleCode: menu.moduleCode})))
+    entries.push(...filterRuntimeModuleMenus(moduleMenus).filter((menu, index, all) => all.findIndex(other => other.moduleCode === menu.moduleCode && other.route === menu.route) === index).map(menu => ({key: menu.key, label: menu.label, route: menu.route, moduleCode: menu.moduleCode})))
     return entries
   }
   return [
@@ -52,7 +44,7 @@ export function buildTenantNavigation(
     ...(principal.accessContext.permissionCodes.includes('core.customer.view') ? [{key:'store-customers',label:'客户管理',route:'/store/customers'}] : []),
     ...(principal.accessContext.permissionCodes.includes('core.site.view') ? [{key:'store-site',label:'首页内容',route:'/store/site'}] : []),
     ...(principal.accessContext.permissionCodes.includes('core.visit.view') ? [{key:'store-visits',label:'咨询预约',route:'/store/visits'}] : []),
-    ...filterRegisteredModuleMenus(moduleMenus).map(menu => ({
+    ...filterRuntimeModuleMenus(moduleMenus).map(menu => ({
       key: menu.key, label: menu.label, route: menu.route, moduleCode: menu.moduleCode
     }))
   ]

@@ -86,14 +86,14 @@ describe('tenant application routes', () => {
     expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument()
   })
 
-  it('does not expose an unlicensed module route', async () => {
+  it('does not expose the legacy membership route', async () => {
     saveTenantSession('tenant-token', '2030-01-01T00:00:00Z', store)
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const data = String(input).endsWith('/auth/me') ? store : []
       return Promise.resolve(new Response(JSON.stringify({ code: 'OK', message: 'success', data }), { status: 200 }))
     }))
     renderAt('/store/membership')
-    expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '页面不存在' })).toBeInTheDocument()
     expect(screen.queryByText('会员运营')).not.toBeInTheDocument()
   })
 
@@ -105,7 +105,7 @@ describe('tenant application routes', () => {
       }
       return Promise.reject(new TypeError('network offline'))
     }))
-    renderAt('/store/membership')
+    renderAt('/modules/membership')
     expect(await screen.findByRole('heading', { name: '模块暂不可用' })).toBeInTheDocument()
     expect(screen.queryByText('会员运营')).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: '重试' })).toHaveLength(1)

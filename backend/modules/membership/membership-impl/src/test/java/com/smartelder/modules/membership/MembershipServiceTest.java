@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.smartelder.core.api.access.*;
 import com.smartelder.core.api.customer.CustomerQueryApi;
+import com.smartelder.module.api.CustomerManagementFeatureProvider;
 import java.nio.file.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -73,6 +74,16 @@ class MembershipServiceTest {
     s.saveLevel((String) l.get("id"), "普通", 1, "", false, 0L);
     assertThatThrownBy(() -> s.enroll(customer, (String) l.get("id"), "开通"))
         .hasMessageContaining("400");
+  }
+
+  @Test
+  void headquartersCustomerDetailProviderDelegatesToMembershipCard() {
+    CustomerManagementFeatureProvider provider=new MembershipConfiguration().membershipCustomerManagementFeature(s);
+    assertThat(provider.moduleCode()).isEqualTo("membership");
+    assertThat(provider.requiredPermission()).isEqualTo("membership:member:read");
+    Map<?,?> card=(Map<?,?>)provider.get(customer);
+    assertThat(card.get("member")).isEqualTo(false);
+    assertThat(card.get("customerPublicId")).isEqualTo(customer);
   }
 
   @Test

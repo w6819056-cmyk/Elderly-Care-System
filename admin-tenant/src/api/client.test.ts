@@ -32,4 +32,19 @@ describe('tenant API client', () => {
     await expect(request('/api/tenant/v1/hq/modules')).rejects.toBeInstanceOf(TenantApiError)
     expect(localStorage.getItem('tenant.access_token')).toBe('tenant-token')
   })
+
+  it('reports an empty non-JSON service response without exposing a JSON parse error', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 502, statusText: 'Bad Gateway' }))
+    await expect(request('/api/tenant/v1/auth/me')).rejects.toMatchObject({
+      status: 502,
+      code: 'INVALID_RESPONSE',
+      message: '企业服务暂不可用，请检查后端服务后重试'
+    })
+  })
+
+  it('clears the tenant session on 401 even when the response body is not JSON', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 401 }))
+    await expect(request('/api/tenant/v1/auth/me')).rejects.toMatchObject({ status: 401, code: 'INVALID_RESPONSE' })
+    expect(localStorage.getItem('tenant.access_token')).toBeNull()
+  })
 })

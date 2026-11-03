@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/tenant/v1/customers")
 public class CustomerManagementController {
     private final CustomerManagementService service;
-    public CustomerManagementController(CustomerManagementService service) {this.service=service;}
+    private final CustomerManagementFeatureService features;
+    public CustomerManagementController(CustomerManagementService service,CustomerManagementFeatureService features) {this.service=service;this.features=features;}
     private <T> ApiResponse<T> ok(T value,HttpServletRequest request) {
         return ApiResponse.success(value,String.valueOf(request.getAttribute(TraceIdFilter.ATTRIBUTE_NAME)),Clock.systemUTC());
     }
@@ -21,5 +22,8 @@ public class CustomerManagementController {
     }
     @GetMapping("/{id}") public Object detail(Authentication auth,@PathVariable String id,HttpServletRequest request) {
         return ok(service.detail(((TenantStaffPrincipal)auth.getPrincipal()).accessContext(),id),request);
+    }
+    @GetMapping("/{id}/module-features") public Object moduleFeatures(Authentication auth,@PathVariable String id,HttpServletRequest request) {
+        return ok(java.util.Map.of("items",features.features(((TenantStaffPrincipal)auth.getPrincipal()).accessContext(),id)),request);
     }
 }

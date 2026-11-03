@@ -3,6 +3,7 @@ package com.smartelder.api.tenant.hq;
 import com.smartelder.api.tenant.auth.TenantStaffPrincipal;
 import com.smartelder.common.ApiResponse;
 import com.smartelder.common.TraceIdFilter;
+import com.smartelder.config.InstalledModulesRegistrar.RuntimeState;
 import com.smartelder.core.licensing.TenantLicenseService;
 import com.smartelder.core.licensing.TenantModuleService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,13 +27,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class HqModuleController {
     private final TenantModuleService modules;
     private final TenantLicenseService licenses;
+    private final RuntimeState runtime;
     private final Clock clock = Clock.systemUTC();
-    public HqModuleController(TenantModuleService modules, TenantLicenseService licenses) {
-        this.modules = modules; this.licenses = licenses;
+    public HqModuleController(TenantModuleService modules, TenantLicenseService licenses, RuntimeState runtime) {
+        this.modules = modules; this.licenses = licenses; this.runtime = runtime;
     }
     @GetMapping("/modules")
     public ApiResponse<List<?>> list(Authentication auth, HttpServletRequest request) {
-        return ApiResponse.success(modules.listModules(context(auth)), trace(request), clock);
+        var installed = runtime.loaded().stream().collect(java.util.stream.Collectors.toMap(
+                module -> module.manifest().module().code(),
+                module -> module.manifest().module().version()));
+        List<ModuleView> result = modules.listModules(context(auth)).stream()
+                .map(module -> new ModuleView(module, installed.get(module.moduleCode())))
+                .toList();
+        return ApiResponse.success(result, trace(request), clock);
     }
     @GetMapping("/module-stores")
     public ApiResponse<List<?>> assignableStores(Authentication auth, HttpServletRequest request) {
@@ -78,4 +86,16 @@ public class HqModuleController {
     public record ActivationRequest(boolean enabled) {}
     public record AssignmentRequest(@NotBlank String storePublicId) {}
     public record StoreOption(String publicId, String storeNo, String name, String status) {}
+    public record ModuleView(String moduleCode, String licenseType, String licenseStatus,
+            java.time.Instant startsAt, java.time.Instant expiresAt, boolean perpetual,
+            long licenseVersion, int storeQuota, int assignedStores, boolean enabled,
+            String effectiveState, boolean installed, String installedVersion) {
+        private ModuleView(com.smartelder.core.licensing.TenantModuleRepository.ModuleSummary module,
+                String installedVersion) {
+            this(module.moduleCode(), module.licenseType(), module.licenseStatus(), module.startsAt(),
+                    module.expiresAt(), module.perpetual(), module.licenseVersion(), module.storeQuota(),
+                    module.assignedStores(), module.enabled(), module.effectiveState(), installedVersion != null,
+                    installedVersion);
+        }
+    }
 }
