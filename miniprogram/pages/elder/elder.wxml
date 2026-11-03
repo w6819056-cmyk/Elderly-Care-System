@@ -1,0 +1,57 @@
+<view class="container {{bigText ? 'big-text' : ''}} {{highContrast ? 'high-contrast' : ''}}">
+  <view class="card">
+    <view class="row">
+      <text class="card-title">您好，{{user.nickname}}</text>
+      <text class="muted">老人端</text>
+    </view>
+
+    <view class="sos-btn" bindtap="triggerSos">SOS</view>
+    <view class="sos-hint" wx:if="{{sosCountdown === 0}}">紧急情况请点击上方按钮，将同时通知家属与平台</view>
+    <view class="sos-hint danger-value" wx:else>已发出呼叫，{{sosCountdown}} 秒内会持续通知家属</view>
+  </view>
+
+  <view class="card" wx:if="{{pendingBindings > 0}}">
+    <view class="card-title">家属绑定申请</view>
+    <view class="muted">有 {{pendingBindings}} 条待确认申请，请到「家人」页处理</view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">
+      <text>我的体征</text>
+      <text class="muted" bindtap="goVitals">查看趋势 ›</text>
+    </view>
+    <view wx:if="{{vitals.length === 0}}" class="empty">还没有体征记录，去「健康」页上报一条</view>
+    <view class="row" wx:for="{{vitals}}" wx:key="id">
+      <text class="label">{{item.measuredAt}}</text>
+      <text class="{{item.abnormal ? 'danger-value' : 'value'}}">{{item.text}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">
+      <text>用药提醒</text>
+      <text class="muted">{{medicationCount}} 项进行中</text>
+    </view>
+    <view class="row">
+      <text class="label">今日提醒</text>
+      <text class="value">{{medicationCount > 0 ? '请按时服药' : '暂无用药计划'}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">快捷服务</view>
+    <button class="btn ghost" bindtap="goOrders">预约上门服务</button>
+  </view>
+
+  <view class="card">
+    <view class="card-title">无障碍设置</view>
+    <view class="row">
+      <text class="label">大字模式</text>
+      <switch checked="{{bigText}}" bindchange="toggleBigText" color="#1f6feb" />
+    </view>
+    <view class="row">
+      <text class="label">高对比度</text>
+      <switch checked="{{highContrast}}" bindchange="toggleContrast" color="#1f6feb" />
+    </view>
+  </view>
+</view>

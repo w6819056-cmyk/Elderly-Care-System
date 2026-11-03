@@ -1,0 +1,119 @@
+page {
+  background: #f4f6fa;
+  font-size: 28rpx;
+  color: #1c2434;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* 适老化（ACC-01）：大字号与高对比度，通过根节点 class 切换 */
+.big-text {
+  font-size: 36rpx;
+}
+.big-text .card-title { font-size: 38rpx; }
+.big-text .btn { font-size: 36rpx; padding: 30rpx 0; }
+.high-contrast {
+  background: #ffffff;
+  color: #000000;
+}
+.high-contrast .card { border: 2rpx solid #000000; }
+
+.container {
+  padding: 24rpx;
+  padding-bottom: 60rpx;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 18rpx;
+  padding: 28rpx;
+  margin-bottom: 22rpx;
+  box-shadow: 0 2rpx 12rpx rgba(16, 32, 60, 0.05);
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid #eef1f6;
+}
+.row:last-child { border-bottom: none; }
+.muted { color: #64748b; font-size: 26rpx; }
+.label { color: #64748b; font-size: 26rpx; }
+.value { font-size: 30rpx; font-weight: 500; }
+.danger-value { color: #d92d20; font-weight: 600; }
+
+.btn {
+  width: 100%;
+  padding: 24rpx 0;
+  border-radius: 14rpx;
+  background: #1f6feb;
+  color: #ffffff;
+  font-size: 30rpx;
+  text-align: center;
+  border: none;
+  line-height: 1.2;
+}
+.btn::after { border: none; }
+.btn.ghost { background: #eef4ff; color: #1f6feb; }
+.btn.plain { background: #ffffff; color: #1c2434; border: 1rpx solid #e3e8ef; }
+
+/* SOS 常驻按钮（SA-01） */
+.sos-btn {
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ff6b5e, #d92d20);
+  color: #fff;
+  font-size: 44rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 20rpx auto 10rpx;
+  box-shadow: 0 10rpx 30rpx rgba(217, 45, 32, 0.35);
+}
+.sos-hint { text-align: center; color: #64748b; font-size: 24rpx; }
+
+.badge {
+  display: inline-block;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+}
+.badge.red { background: #fdecea; color: #d92d20; }
+.badge.yellow { background: #fdf3e0; color: #b57700; }
+.badge.blue { background: #e8f1ff; color: #1570ef; }
+.badge.green { background: #e6f6ee; color: #12925b; }
+.badge.gray { background: #eef1f6; color: #475569; }
+
+.input {
+  border: 1rpx solid #e3e8ef;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 18rpx;
+  background: #ffffff;
+  font-size: 28rpx;
+}
+
+.tab-row { display: flex; gap: 16rpx; margin-bottom: 20rpx; }
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 26rpx;
+}
+.tab.active { background: #1f6feb; color: #ffffff; }
+.empty { text-align: center; color: #94a3b8; padding: 40rpx 0; font-size: 26rpx; }

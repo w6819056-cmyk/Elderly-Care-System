@@ -1,0 +1,21 @@
+<view class="container">
+  <view class="card" style="margin-top: 80rpx;">
+    <view class="card-title">综合智慧养老平台</view>
+    <view class="muted" style="margin-bottom: 30rpx;">老人端 / 家属端登录</view>
+
+    <input class="input" placeholder="手机号" type="number" value="{{phone}}" bindinput="onPhoneInput" />
+    <input class="input" placeholder="密码" password value="{{password}}" bindinput="onPasswordInput" />
+
+    <button class="btn" loading="{{loading}}" bindtap="login">登录</button>
+    <view style="height: 20rpx;"></view>
+    <button class="btn plain" bindtap="register">注册新老人账号</button>
+
+    <view style="margin-top: 36rpx;">
+      <view class="muted" style="margin-bottom: 16rpx;">演示账号（密码均为 888888）</view>
+      <view class="row" wx:for="{{demoHints}}" wx:key="phone">
+        <text class="label">{{item.label}}</text>
+        <text class="value" bindtap="useDemo" data-phone="{{item.phone}}">{{item.phone}} · 点击填入</text>
+      </view>
+    </view>
+  </view>
+</view>

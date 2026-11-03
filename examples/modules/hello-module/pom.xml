@@ -1,0 +1,9 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+ <modelVersion>4.0.0</modelVersion><parent><groupId>com.smartelder</groupId><artifactId>elderly-care-backend</artifactId><version>2.0.0-SNAPSHOT</version><relativePath>../../../backend/pom.xml</relativePath></parent>
+ <artifactId>hello-module</artifactId><version>1.0.0</version>
+ <dependencies>
+  <dependency><groupId>com.smartelder</groupId><artifactId>care-module-api</artifactId><version>2.0.0-SNAPSHOT</version><scope>provided</scope></dependency>
+  <dependency><groupId>org.springframework</groupId><artifactId>spring-context</artifactId><scope>provided</scope></dependency>
+  <dependency><groupId>org.springframework</groupId><artifactId>spring-web</artifactId><scope>provided</scope></dependency>
+ </dependencies>
+</project>

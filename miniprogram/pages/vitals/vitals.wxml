@@ -1,0 +1,57 @@
+<view class="container">
+  <view class="card">
+    <view class="card-title">体征上报</view>
+    <view class="tab-row">
+      <view
+        wx:for="{{types}}"
+        wx:key="key"
+        class="tab {{activeType === item.key ? 'active' : ''}}"
+        bindtap="switchType"
+        data-key="{{item.key}}"
+      >{{item.label}}</view>
+    </view>
+
+    <input class="input" type="digit" placeholder="收缩压 / 心率 / 血糖值" value="{{value1}}" bindinput="onValue1" />
+    <input
+      wx:if="{{activeType === 'BLOOD_PRESSURE'}}"
+      class="input"
+      type="digit"
+      placeholder="舒张压（可选）"
+      value="{{value2}}"
+      bindinput="onValue2"
+    />
+    <button class="btn" loading="{{submitting}}" bindtap="submitVital">保存记录</button>
+    <view class="muted" style="margin-top: 16rpx;">
+      超出阈值（如同步收缩压≥140）时会自动通知家属，并生成关注级告警
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">历史记录</view>
+    <view wx:if="{{records.length === 0}}" class="empty">暂无记录</view>
+    <view class="row" wx:for="{{records}}" wx:key="id">
+      <text class="label">{{item.measuredAt}}</text>
+      <text class="{{item.abnormal ? 'danger-value' : 'value'}}">{{item.text}}</text>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="card-title">用药计划</view>
+    <view wx:if="{{medications.length === 0}}" class="empty">暂无用药计划</view>
+    <view class="row" wx:for="{{medications}}" wx:key="id">
+      <view>
+        <view class="value">{{item.drugName}} {{item.dosage}}</view>
+        <view class="muted">{{item.frequency}} · {{item.remindTime}}</view>
+      </view>
+      <text class="badge gray" bindtap="stopMedication" data-id="{{item.id}}">停用</text>
+    </view>
+
+    <view style="margin-top: 20rpx; border-top: 1rpx solid #eef1f6; padding-top: 20rpx;">
+      <input class="input" placeholder="药品名称" value="{{drugName}}" bindinput="onDrugName" />
+      <input class="input" placeholder="剂量（如 5mg）" value="{{dosage}}" bindinput="onDosage" />
+      <input class="input" placeholder="频次（如 每日一次）" value="{{frequency}}" bindinput="onFrequency" />
+      <input class="input" placeholder="提醒时间（如 08:00）" value="{{remindTime}}" bindinput="onRemindTime" />
+      <button class="btn ghost" bindtap="addMedication">添加用药提醒</button>
+    </view>
+  </view>
+</view>

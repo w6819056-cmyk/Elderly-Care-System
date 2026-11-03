@@ -1,0 +1,14 @@
+{
+ "formatVersion":1,"keyId":"preview-publisher",
+ "module":{
+  "code":"hello-module","name":"模块安装验证","version":"1.0.0","menuOrder":990,
+  "dependencies":[],"permissionCodes":["hello-module:record:read"],
+  "menuEntries":[{"key":"hello-module","label":"安装验证","route":"/modules/hello-module","icon":"package","permissionCode":"hello-module:record:read"}],
+  "resourceOperations":[{"resource":"HelloResource","operation":"read","permissionCode":"hello-module:record:read","storeScoped":true,"writeOperation":false}],
+  "windDownOperations":[]
+ },
+ "minCoreVersion":"2.0.0","maxCoreVersionExclusive":"3.0.0",
+ "entryClass":"com.smartelder.modules.hello_module.Entry",
+ "frontendEntries":{"STORE":"frontend/store.js"},
+ "migrations":["migrations/V1__hello_module.sql"],"files":{}
+}

@@ -1,0 +1,15 @@
+{
+  "description": "综合智慧养老平台 - 老人端与家属端小程序",
+  "miniprogramRoot": "./",
+  "appid": "touristappid",
+  "projectname": "elderly-care-miniprogram",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "libVersion": "3.3.4"
+}

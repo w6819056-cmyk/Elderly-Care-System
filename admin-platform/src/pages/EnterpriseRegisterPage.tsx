@@ -1,0 +1,7 @@
+import {useState,type FormEvent} from 'react'
+import {Link} from 'react-router-dom'
+import {request} from '../api/client'
+import './commerce-workspace.css'
+export default function EnterpriseRegisterPage(){const [done,setDone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+ async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);setBusy(true);setError('');try{const result=await request<{applicationId:string}>('/api/platform/v1/enterprise-applications',{method:'POST',body:JSON.stringify(Object.fromEntries(f))});setDone(result.applicationId)}catch(e){setError(e instanceof Error?e.message:'登记失败')}finally{setBusy(false)}}
+ return <main className="commerce-workspace" style={{maxWidth:760,margin:'40px auto',height:'auto',background:'#faf6ed',borderRadius:24}}><h1>企业自助登记</h1><p>提交企业信息，平台审核通过后可开通企业身份并购买模块。</p>{error&&<p className="form-error" role="alert">{error}</p>}{done?<section className="commerce-panel"><h2>已提交，等待平台审核</h2><p>申请编号：{done}</p><p>请保留申请编号，平台将根据登记联系方式与您联系。</p></section>:<section className="commerce-panel"><form onSubmit={submit}><label>企业编号<input name="orgNo" required pattern="[a-zA-Z0-9_-]{2,40}" maxLength={40}/></label><label>企业名称<input name="name" required maxLength={100}/></label><label>联系人<input name="contactName" required maxLength={100}/></label><label>联系电话<input name="contactPhone" required maxLength={40}/></label><footer><button disabled={busy}>{busy?'提交中…':'提交登记'}</button></footer></form></section>}<Link to="/login">返回登录</Link></main>}

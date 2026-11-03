@@ -1,0 +1,94 @@
+{
+  "formatVersion": 1,
+  "keyId": "development",
+  "module": {
+    "code": "membership",
+    "name": "会员管理",
+    "version": "1.0.0",
+    "menuOrder": 30,
+    "dependencies": [],
+    "permissionCodes": [
+      "membership:level:read",
+      "membership:level:write",
+      "membership:member:read",
+      "membership:member:write",
+      "membership:history:read",
+      "membership:identity:read"
+    ],
+    "menuEntries": [
+      {
+        "key": "membership-hq",
+        "label": "会员管理",
+        "route": "/modules/membership/manage",
+        "icon": "users",
+        "permissionCode": "membership:level:read"
+      },
+      {
+        "key": "membership-store",
+        "label": "会员查询",
+        "route": "/modules/membership",
+        "icon": "users",
+        "permissionCode": "membership:identity:read"
+      }
+    ],
+    "resourceOperations": [
+      {
+        "resource": "history",
+        "operation": "read",
+        "permissionCode": "membership:history:read",
+        "storeScoped": false,
+        "writeOperation": false
+      },
+      {
+        "resource": "identity",
+        "operation": "read",
+        "permissionCode": "membership:identity:read",
+        "storeScoped": true,
+        "writeOperation": false
+      },
+      {
+        "resource": "level",
+        "operation": "read",
+        "permissionCode": "membership:level:read",
+        "storeScoped": false,
+        "writeOperation": false
+      },
+      {
+        "resource": "level",
+        "operation": "write",
+        "permissionCode": "membership:level:write",
+        "storeScoped": false,
+        "writeOperation": true
+      },
+      {
+        "resource": "member",
+        "operation": "read",
+        "permissionCode": "membership:member:read",
+        "storeScoped": false,
+        "writeOperation": false
+      },
+      {
+        "resource": "member",
+        "operation": "write",
+        "permissionCode": "membership:member:write",
+        "storeScoped": false,
+        "writeOperation": true
+      }
+    ],
+    "windDownOperations": []
+  },
+  "minCoreVersion": "2.1.0",
+  "maxCoreVersionExclusive": "3.0.0",
+  "entryClass": "com.smartelder.modules.membership.Entry",
+  "frontendEntries": {
+    "HQ": "frontend/main.js",
+    "STORE": "frontend/main.js"
+  },
+  "migrations": [
+    "migrations/V1__membership.sql"
+  ],
+  "files": {
+    "backend/module.jar": "0000000000000000000000000000000000000000000000000000000000000000",
+    "migrations/V1__membership.sql": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}

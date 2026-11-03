@@ -1,0 +1,128 @@
+<view class="container">
+  <!-- 家属视图 -->
+  <block wx:if="{{role === 'FAMILY'}}">
+    <view class="card">
+      <view class="card-title">
+        <text>老人状态</text>
+        <text class="muted" bindtap="refresh">{{refreshing ? '刷新中…' : '刷新'}}</text>
+      </view>
+      <view wx:if="{{elders.length === 0}}" class="empty">
+        尚未绑定老人，请在下方提交绑定申请，并让老人确认
+      </view>
+      <view class="tab-row" wx:if="{{elders.length > 1}}">
+        <view
+          wx:for="{{elders}}"
+          wx:key="id"
+          class="tab {{currentElderId === item.id ? 'active' : ''}}"
+          bindtap="switchElder"
+          data-id="{{item.id}}"
+        >{{item.name}}</view>
+      </view>
+    </view>
+
+    <block wx:if="{{snapshot}}">
+      <view class="card">
+        <view class="card-title">{{snapshot.name}}</view>
+        <view class="row">
+          <text class="label">地址</text>
+          <text class="value">{{snapshot.address || '—'}}</text>
+        </view>
+        <view class="row">
+          <text class="label">紧急联系人</text>
+          <text class="value">{{snapshot.emergencyContact || '—'}} {{snapshot.emergencyPhone || ''}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="card-title">最新体征</view>
+        <view wx:if="{{snapshot.vitals.length === 0}}" class="empty">暂无体征数据</view>
+        <view class="row" wx:for="{{snapshot.vitals}}" wx:key="id">
+          <text class="label">{{item.measuredAt}}</text>
+          <text class="{{item.abnormal ? 'danger-value' : 'value'}}">{{item.text}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="card-title">告警</view>
+        <view wx:if="{{snapshot.alerts.length === 0}}" class="empty">暂无未归档告警</view>
+        <view class="row" wx:for="{{snapshot.alerts}}" wx:key="id">
+          <view style="flex: 1;">
+            <view>
+              <text class="badge {{item.tone}}">{{item.levelLabel}}</text>
+              <text class="value" style="margin-left: 12rpx;">{{item.typeLabel}}</text>
+            </view>
+            <view class="muted">{{item.content}} · {{item.createdAt}}</view>
+            <view class="muted">状态：{{item.statusLabel}}</view>
+          </view>
+          <button
+            wx:if="{{item.status === 'PENDING'}}"
+            class="btn plain"
+            style="width: 160rpx; padding: 14rpx 0;"
+            bindtap="handleAlert"
+            data-id="{{item.id}}"
+          >确认</button>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="card-title">在办服务</view>
+        <view wx:if="{{snapshot.orders.length === 0}}" class="empty">暂无进行中的服务</view>
+        <view class="row" wx:for="{{snapshot.orders}}" wx:key="id">
+          <view>
+            <view class="value">{{item.itemName}}</view>
+            <view class="muted">{{item.appointTime || '立即服务'}} · {{item.statusLabel}}</view>
+          </view>
+          <text class="badge blue">¥{{item.amountText}}</text>
+        </view>
+      </view>
+
+      <view class="card">
+        <view class="card-title">用药计划</view>
+        <view wx:if="{{snapshot.medications.length === 0}}" class="empty">暂无用药计划</view>
+        <view class="row" wx:for="{{snapshot.medications}}" wx:key="id">
+          <view>
+            <view class="value">{{item.drugName}} {{item.dosage}}</view>
+            <view class="muted">{{item.frequency}} · {{item.remindTime}}</view>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view class="card">
+      <view class="card-title">绑定老人</view>
+      <input class="input" type="number" placeholder="老人 ID（老人端登录后可查）" value="{{bindElderId}}" bindinput="onBindElderId" />
+      <input class="input" placeholder="关系（如 儿子 / 女儿）" value="{{bindRelation}}" bindinput="onBindRelation" />
+      <button class="btn ghost" bindtap="submitBind">提交绑定申请</button>
+      <view class="muted" style="margin-top: 16rpx;">绑定需老人本人在老人端确认后生效（双向确认）</view>
+    </view>
+  </block>
+
+  <!-- 老人视图：处理家属绑定申请 -->
+  <block wx:else>
+    <view class="card">
+      <view class="card-title">家属绑定申请</view>
+      <view wx:if="{{myBindings.length === 0}}" class="empty">暂无待确认的绑定申请</view>
+      <view class="row" wx:for="{{myBindings}}" wx:key="id">
+        <view>
+          <view class="value">家属 ID {{item.familyId}}</view>
+          <view class="muted">关系：{{item.relation}}</view>
+        </view>
+        <view style="display: flex; gap: 12rpx;">
+          <button class="btn" style="width: 140rpx; padding: 14rpx 0;" bindtap="decide" data-id="{{item.id}}" data-accept="true">同意</button>
+          <button class="btn plain" style="width: 140rpx; padding: 14rpx 0;" bindtap="decide" data-id="{{item.id}}" data-accept="false">拒绝</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="card-title">使用说明</view>
+      <view class="muted">
+        1. 家属填写老人 ID 提交绑定申请；
+        <br />
+        2. 老人在本页确认后，家属才能查看体征、告警与服务状态；
+        <br />
+        3. 老人可随时联系平台客服解除绑定。
+      </view>
+    </view>
+  </block>
+</view>

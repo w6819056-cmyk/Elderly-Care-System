@@ -1,0 +1,72 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: elderly-care-backend
+  flyway:
+    locations: classpath:db/migration/tenant
+  datasource:
+    url: jdbc:mysql://localhost:3306/elderly_care?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: ${TENANT_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+  sql:
+    init:
+      mode: never
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: null
+
+app:
+  jwt:
+    # 生产环境必须通过环境变量 APP_JWT_SECRET 覆盖
+    secret: ${APP_JWT_SECRET:elderly-care-platform-dev-secret-key-please-change-in-production-2026}
+    ttl-hours: 72
+  tenant-staff-jwt:
+    secret: ${TENANT_STAFF_JWT_SECRET:elderly-care-tenant-staff-jwt-dev-secret-2026-change-me}
+    ttl-minutes: 720
+  tenant-bootstrap:
+    enabled: ${TENANT_BOOTSTRAP_ENABLED:false}
+    org-no: ${TENANT_ORG_NO:}
+    enterprise-name: ${TENANT_ENTERPRISE_NAME:}
+    owner-account: ${TENANT_OWNER_ACCOUNT:}
+    owner-display-name: ${TENANT_OWNER_DISPLAY_NAME:}
+    owner-password: ${TENANT_OWNER_PASSWORD:}
+  license:
+    enabled: ${PLATFORM_LICENSE_ENABLED:false}
+    heartbeat-interval-ms: ${PLATFORM_LICENSE_HEARTBEAT_INTERVAL_MS:21600000}
+    retry-poll-ms: ${PLATFORM_LICENSE_RETRY_POLL_MS:60000}
+    platform-base-url: ${PLATFORM_LICENSE_BASE_URL:}
+    org-no: ${TENANT_ORG_NO:}
+    instance-public-id: ${PLATFORM_INSTANCE_PUBLIC_ID:}
+    instance-fingerprint: ${PLATFORM_INSTANCE_FINGERPRINT:}
+    instance-private-key-pem: ${PLATFORM_INSTANCE_PRIVATE_KEY_PEM:}
+    activation-code: ${PLATFORM_ACTIVATION_CODE:}
+    installation-id: ${PLATFORM_INSTALLATION_ID:}
+    tenant-database-id: ${PLATFORM_TENANT_DATABASE_ID:}
+    trusted-keys:
+      ${PLATFORM_LICENSE_KEY_ID:license-key-local}: ${PLATFORM_LICENSE_PUBLIC_KEY:}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.smartelder: INFO

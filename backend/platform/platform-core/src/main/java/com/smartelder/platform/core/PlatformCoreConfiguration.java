@@ -1,0 +1,316 @@
+package com.smartelder.platform.core;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartelder.platform.core.auth.PlatformAdminRepository;
+import com.smartelder.platform.core.auth.PlatformAdminService;
+import com.smartelder.platform.core.auth.PlatformAuthService;
+import com.smartelder.platform.core.auth.PlatformTokenService;
+import com.smartelder.platform.core.catalog.ModuleCatalogService;
+import com.smartelder.platform.core.catalog.ModuleVersionService;
+import com.smartelder.platform.core.common.IdempotencyService;
+import com.smartelder.platform.core.common.PlatformAuditService;
+import com.smartelder.platform.core.common.PlatformClock;
+import com.smartelder.platform.core.commerce.EntitlementService;
+import com.smartelder.platform.core.commerce.LicenseIssueService;
+import com.smartelder.platform.core.commerce.OrderQuoteService;
+import com.smartelder.platform.core.commerce.PlanService;
+import com.smartelder.platform.core.commerce.SalesOrderService;
+import com.smartelder.platform.core.enterprise.ActivationService;
+import com.smartelder.platform.core.enterprise.EnterpriseService;
+import com.smartelder.platform.core.enterprise.EnterpriseEntitlementService;
+import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
+import com.smartelder.platform.core.enterprise.InstanceService;
+import com.smartelder.platform.core.enterprise.HeartbeatService;
+import com.smartelder.platform.core.enterprise.LicenseRefreshService;
+import com.smartelder.platform.core.enterprise.LicenseSigningService;
+import com.smartelder.platform.licensing.Ed25519LicenseSigner;
+import com.smartelder.platform.licensing.LicenseSigner;
+import java.time.Clock;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+
+@Configuration(proxyBeanMethods = false)
+public class PlatformCoreConfiguration {
+
+    @Bean
+    PlatformClock platformClock(Clock clock) {
+        return new PlatformClock(clock);
+    }
+
+    @Bean
+    PlatformAuditService platformAuditService(JdbcClient jdbcClient, PlatformClock clock) {
+        return new PlatformAuditService(jdbcClient, clock);
+    }
+
+    @Bean
+    IdempotencyService idempotencyService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager,
+            PlatformClock clock
+    ) {
+        return new IdempotencyService(jdbcClient, objectMapper, transactionManager, clock);
+    }
+
+    @Bean
+    PasswordEncoder platformPasswordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    PlatformAdminRepository platformAdminRepository(JdbcClient jdbcClient) {
+        return new PlatformAdminRepository(jdbcClient);
+    }
+
+    @Bean
+    PlatformTokenService platformTokenService(
+            @Value("${platform.jwt.secret}") String secret,
+            @Value("${platform.jwt.ttl-hours:8}") long ttlHours,
+            Clock clock
+    ) {
+        return new PlatformTokenService(secret, Duration.ofHours(ttlHours), clock);
+    }
+
+    @Bean
+    PlatformAdminService platformAdminService(
+            PlatformAdminRepository repository,
+            PasswordEncoder passwordEncoder,
+            PlatformAuditService auditService,
+            PlatformClock clock,
+            ObjectMapper objectMapper
+    ) {
+        return new PlatformAdminService(
+                repository,
+                passwordEncoder,
+                auditService,
+                clock,
+                objectMapper
+        );
+    }
+    @Bean
+    PlatformAuthService platformAuthService(
+            PlatformAdminRepository repository,
+            PasswordEncoder passwordEncoder,
+            PlatformTokenService tokenService,
+            PlatformAuditService auditService,
+            PlatformClock clock
+    ) {
+        return new PlatformAuthService(
+                repository,
+                passwordEncoder,
+                tokenService,
+                auditService,
+                clock
+        );
+    }
+
+    @Bean
+    LicenseSigner platformLicenseSigner(
+            @Value("${platform.license.key-id:platform-license-v1}") String keyId,
+            @Value("${platform.license.signing-private-key}") String privateKeyPem
+    ) {
+        return Ed25519LicenseSigner.fromPem(
+                keyId,
+                privateKeyPem.replace("\\n", "\n")
+        );
+    }
+
+    @Bean
+    EnterpriseService platformEnterpriseService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService
+    ) {
+        return new EnterpriseService(jdbcClient, clock, auditService);
+    }
+
+    @Bean
+    EnterpriseEntitlementService platformEnterpriseEntitlementService(JdbcClient jdbcClient, PlatformClock clock,
+            PlatformAuditService auditService, LicenseIssueService licenseIssueService, PlatformTransactionManager manager) {
+        return new EnterpriseEntitlementService(jdbcClient, clock, auditService, licenseIssueService, manager);
+    }
+
+    @Bean
+    LicenseSigningService platformLicenseSigningService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            LicenseSigner licenseSigner,
+            PlatformClock clock
+    ) {
+        return new LicenseSigningService(jdbcClient, objectMapper, licenseSigner, clock);
+    }
+
+    @Bean
+    LicenseIssueService platformLicenseIssueService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            LicenseSigner licenseSigner,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new LicenseIssueService(
+                jdbcClient,
+                objectMapper,
+                licenseSigner,
+                clock,
+                auditService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    EntitlementService platformEntitlementService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            LicenseIssueService licenseIssueService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new EntitlementService(
+                jdbcClient,
+                clock,
+                licenseIssueService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    ActivationService platformActivationService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            EnterpriseService enterpriseService,
+            LicenseSigningService licenseSigningService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ActivationService(
+                jdbcClient,
+                clock,
+                auditService,
+                enterpriseService,
+                licenseSigningService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    InstanceRequestVerifier platformInstanceRequestVerifier(
+            JdbcClient jdbcClient,
+            PlatformClock clock
+    ) {
+        return new InstanceRequestVerifier(jdbcClient, clock);
+    }
+
+    @Bean
+    InstanceService platformInstanceService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            EnterpriseService enterpriseService,
+            LicenseSigningService licenseSigningService
+    ) {
+        return new InstanceService(
+                jdbcClient,
+                clock,
+                enterpriseService,
+                licenseSigningService
+        );
+    }
+
+    @Bean
+    HeartbeatService platformHeartbeatService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            LicenseSigningService licenseSigningService,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new HeartbeatService(
+                jdbcClient, clock, licenseSigningService, objectMapper, transactionManager
+        );
+    }
+
+    @Bean
+    LicenseRefreshService platformLicenseRefreshService(
+            JdbcClient jdbcClient,
+            LicenseSigningService licenseSigningService,
+            PlatformClock clock
+    ) {
+        return new LicenseRefreshService(jdbcClient, licenseSigningService, clock);
+    }
+
+    @Bean
+    ModuleVersionService platformModuleVersionService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ModuleVersionService(
+                jdbcClient,
+                clock,
+                auditService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    ModuleCatalogService platformModuleCatalogService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            ModuleVersionService versionService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new ModuleCatalogService(
+                jdbcClient,
+                clock,
+                auditService,
+                versionService,
+                transactionManager
+        );
+    }
+
+    @Bean
+    OrderQuoteService platformOrderQuoteService(JdbcClient jdbcClient, PlatformClock clock) {
+        return new OrderQuoteService(jdbcClient, clock);
+    }
+
+    @Bean
+    PlanService platformPlanService(
+            JdbcClient jdbcClient,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new PlanService(jdbcClient, clock, auditService, transactionManager);
+    }
+
+    @Bean
+    SalesOrderService platformSalesOrderService(
+            JdbcClient jdbcClient,
+            ObjectMapper objectMapper,
+            PlatformClock clock,
+            PlatformAuditService auditService,
+            OrderQuoteService quoteService,
+            IdempotencyService idempotencyService,
+            EntitlementService entitlementService,
+            PlatformTransactionManager transactionManager
+    ) {
+        return new SalesOrderService(
+                jdbcClient,
+                objectMapper,
+                clock,
+                auditService,
+                quoteService,
+                idempotencyService,
+                entitlementService,
+                transactionManager
+        );
+    }
+}
