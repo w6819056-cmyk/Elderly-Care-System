@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -120,6 +122,44 @@ class ModuleAccessQueryTest {
         assertThat(otherResource.allowed()).isFalse();
         assertThat(otherResource.state()).isEqualTo("WIND_DOWN");
         assertThat(otherResource.reasonCode()).isEqualTo("MODULE_READ_ONLY");
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("lifecycleCases")
+    void lifecycleMatrixAppliesExpectedReadAndWriteAccessWithoutDeletingBusinessData(LifecycleCase scenario) {
+        Fixture f = fixture(NOW.plusSeconds(10 * 86400L), NOW);
+        f.jdbc.sql("CREATE TABLE mem_member_probe(public_id VARCHAR(36) PRIMARY KEY, customer_public_id VARCHAR(36) NOT NULL)").update();
+        f.jdbc.sql("INSERT INTO mem_member_probe VALUES('member-1','customer-1')").update();
+        scenario.change().accept(f);
+
+        var read = f.query.evaluate("membership", "MemberResource", "read", f.storeId, NOW);
+        var write = f.query.evaluate("membership", "MemberResource", "write", f.storeId, NOW);
+
+        assertThat(read.state()).as("read state").isEqualTo(scenario.expectedState());
+        assertThat(read.allowed()).as("read access").isEqualTo(scenario.readAllowed());
+        assertThat(write.state()).as("write state").isEqualTo(scenario.expectedState());
+        assertThat(write.allowed()).as("write access").isEqualTo(scenario.writeAllowed());
+        assertThat(f.jdbc.sql("SELECT COUNT(*) FROM mem_member_probe WHERE public_id='member-1'").query(Integer.class).single())
+                .as("existing module data is retained across lifecycle changes").isEqualTo(1);
+    }
+
+    private static java.util.stream.Stream<LifecycleCase> lifecycleCases() {
+        return java.util.stream.Stream.of(
+                new LifecycleCase("active entitlement, enabled, assigned", f -> {}, "ACTIVE", true, true),
+                new LifecycleCase("revoked entitlement", f -> f.jdbc.sql("UPDATE lic_module_entitlement SET status='REVOKED' WHERE module_code='membership'").update(), "UNLICENSED", false, false),
+                new LifecycleCase("disabled module", f -> f.jdbc.sql("UPDATE core_enterprise_module SET enabled=FALSE WHERE module_code='membership'").update(), "DISABLED", false, false),
+                new LifecycleCase("revoked store assignment", f -> f.jdbc.sql("UPDATE core_store_module_assignment SET status='REVOKED' WHERE module_code='membership'").update(), "NOT_ASSIGNED", false, false),
+                new LifecycleCase("offline grace elapsed", f -> f.jdbc.sql("UPDATE lic_license_snapshot SET last_successful_sync_at=:sync WHERE id=1")
+                        .param("sync", Timestamp.from(NOW.minusSeconds(8 * 86400L))).update(), "OFFLINE_READ_ONLY", true, false),
+                new LifecycleCase("three-day wind-down", f -> f.expireAt(NOW.minusSeconds(2 * 86400L)), "WIND_DOWN", true, true),
+                new LifecycleCase("wind-down ended", f -> f.expireAt(NOW.minusSeconds(4 * 86400L)), "READ_ONLY", true, false),
+                new LifecycleCase("not-yet-started entitlement", f -> f.jdbc.sql("UPDATE lic_module_entitlement SET starts_at=:start WHERE module_code='membership'")
+                        .param("start", Timestamp.from(NOW.plusSeconds(1))).update(), "UNLICENSED", false, false));
+    }
+
+    private record LifecycleCase(String name, java.util.function.Consumer<Fixture> change,
+            String expectedState, boolean readAllowed, boolean writeAllowed) {
+        @Override public String toString() { return name; }
     }
 
     private Fixture fixture(Instant expiresAt, Instant syncedAt) {

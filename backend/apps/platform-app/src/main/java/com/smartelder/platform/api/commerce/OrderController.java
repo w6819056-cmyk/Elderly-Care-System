@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -55,6 +56,18 @@ public class OrderController {
         return ApiResponse.success(quote, traceId, clock);
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('platform.order.view')")
+    public ApiResponse<SalesOrderService.PageResult<SalesOrderService.OrderView>> list(
+            @RequestParam(required = false) String enterpriseId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        return ApiResponse.success(orderService.list(enterpriseId, status, page, pageSize), traceId, clock);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('platform.order.manage')")
@@ -87,6 +100,42 @@ public class OrderController {
             @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
     ) {
         return ApiResponse.success(orderService.get(publicId), traceId, clock);
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{publicId}")
+    @PreAuthorize("hasAuthority('platform.order.manage')")
+    public ApiResponse<SalesOrderService.OrderView> editPending(
+            @PathVariable String publicId,
+            @RequestBody String requestBody,
+            @AuthenticationPrincipal PlatformPrincipal principal,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        OrderRequest request = parse(requestBody);
+        return ApiResponse.success(orderService.editPending(publicId, new SalesOrderService.CreateOrderCommand(
+                request.enterpriseId(), request.planCode(), toQuoteItems(request.items()), toBillingPeriod(request.period())),
+                principal, requestBody, traceId), traceId, clock);
+    }
+
+    @PostMapping("/{publicId}/items/{moduleCode}/revoke")
+    @PreAuthorize("hasAuthority('platform.order.manage')")
+    public ApiResponse<SalesOrderService.OrderView> revokeModuleAuthorization(@PathVariable String publicId,
+            @PathVariable String moduleCode,@RequestBody ReasonRequest request,@AuthenticationPrincipal PlatformPrincipal principal,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId) {
+        return ApiResponse.success(orderService.changeModuleAuthorization(publicId,moduleCode,request.reason(),false,principal,traceId),traceId,clock);
+    }
+
+    @PostMapping("/{publicId}/items/{moduleCode}/restore")
+    @PreAuthorize("hasAuthority('platform.order.manage')")
+    public ApiResponse<SalesOrderService.OrderView> restoreModuleAuthorization(@PathVariable String publicId,
+            @PathVariable String moduleCode,@RequestBody ReasonRequest request,@AuthenticationPrincipal PlatformPrincipal principal,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId) {
+        return ApiResponse.success(orderService.changeModuleAuthorization(publicId,moduleCode,request.reason(),true,principal,traceId),traceId,clock);
+    }
+
+    @PostMapping("/{publicId}/cancel")
+    @PreAuthorize("hasAuthority('platform.order.manage')")
+    public Object cancel(@PathVariable String publicId,@AuthenticationPrincipal PlatformPrincipal principal,@RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId) {
+        return ApiResponse.success(orderService.cancelPending(publicId,principal,traceId),traceId,clock);
     }
 
     @PostMapping("/{publicId}/pay-simulated")
@@ -197,7 +246,8 @@ public class OrderController {
             String enterpriseId,
             String planCode,
             List<QuoteItemRequest> items,
-            BillingPeriodRequest period
+            BillingPeriodRequest period,
+            String couponCode
     ) {
     }
 
@@ -221,4 +271,6 @@ public class OrderController {
 
     public record RefundRequest(String reason) {
     }
+
+    public record ReasonRequest(String reason) {}
 }

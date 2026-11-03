@@ -16,6 +16,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -67,6 +69,13 @@ public class PlanController {
         return ApiResponse.success(plan, traceId, clock);
     }
 
+    @PutMapping("/{code}")
+    @PreAuthorize("hasAuthority('platform.plan.manage')")
+    public Object update(@PathVariable String code,@Valid @RequestBody CreatePlanRequest request,@AuthenticationPrincipal PlatformPrincipal actor,@RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId) {
+        var items=request.items().stream().map(item->new PlanService.PlanItemCommand(item.moduleCode(),item.billingMode(),item.durationDays(),item.storeQuota())).toList();
+        return ApiResponse.success(planService.update(code,new PlanService.CreatePlanCommand(request.code(),request.name(),request.description(),request.amount(),request.minimumAmount(),items),actor,traceId),traceId,clock);
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('platform.plan.view')")
     public ApiResponse<List<PlanService.PlanView>> list(
@@ -74,6 +83,25 @@ public class PlanController {
             @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
     ) {
         return ApiResponse.success(planService.list(enterpriseId), traceId, clock);
+    }
+
+    @GetMapping("/catalog")
+    @PreAuthorize("hasAuthority('platform.plan.view')")
+    public ApiResponse<List<PlanService.PlanView>> catalog(
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        return ApiResponse.success(planService.listCatalog(), traceId, clock);
+    }
+
+    @PutMapping("/{code}/status")
+    @PreAuthorize("hasAuthority('platform.plan.manage')")
+    public ApiResponse<PlanService.PlanView> changeStatus(
+            @PathVariable String code,
+            @Valid @RequestBody ChangePlanStatusRequest request,
+            @AuthenticationPrincipal PlatformPrincipal principal,
+            @RequestAttribute(TraceIdFilter.ATTRIBUTE_NAME) String traceId
+    ) {
+        return ApiResponse.success(planService.changeStatus(code, request.status(), principal, traceId), traceId, clock);
     }
 
     public record CreatePlanRequest(
@@ -99,6 +127,11 @@ public class PlanController {
             String billingMode,
             int durationDays,
             int storeQuota
+    ) {
+    }
+
+    public record ChangePlanStatusRequest(
+            @NotBlank @Pattern(regexp = "ON_SALE|OFF_SALE") String status
     ) {
     }
 }

@@ -15,11 +15,13 @@ class ArchitectureBoundaryTest {
     @ArchTest
     static final ArchRule platform_does_not_depend_on_tenant_business = noClasses()
             .that().resideInAPackage("com.smartelder.platform..")
-            .should().dependOnClassesThat().resideInAnyPackage(
+            .should().dependOnClassesThat(com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage(
                     "com.smartelder.core..",
                     "com.smartelder.business..",
-                    "com.smartelder.module.."
-            );
+                    "com.smartelder.module..", "com.smartelder.modules.."
+            ).and(com.tngtech.archunit.base.DescribedPredicate.not(
+                    com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage(
+                            "com.smartelder.module.api..", "com.smartelder.module.packaging.."))));
 
     @ArchTest
     static final ArchRule api_does_not_depend_on_internal_implementations = noClasses()

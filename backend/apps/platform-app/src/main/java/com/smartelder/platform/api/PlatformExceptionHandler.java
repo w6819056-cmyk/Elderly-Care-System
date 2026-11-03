@@ -57,6 +57,11 @@ public class PlatformExceptionHandler {
         return error(ErrorCode.INVALID_REQUEST, message, request);
     }
 
+    @ExceptionHandler(org.springframework.dao.DuplicateKeyException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicate(org.springframework.dao.DuplicateKeyException exception,HttpServletRequest request) {
+        return error(ErrorCode.CONFLICT,"数据已存在或被并发修改，请刷新后重试",request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpectedException(
             Exception exception,

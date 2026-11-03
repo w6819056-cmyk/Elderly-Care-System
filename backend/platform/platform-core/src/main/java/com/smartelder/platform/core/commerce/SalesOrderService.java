@@ -100,13 +100,155 @@ public class SalesOrderService {
                 "POST",
                 CREATE_PATH,
                 body,
-                () -> createInternal(command, actor, body, traceId),
+                () -> createInternal(command, new OrderActor(actor.userId(),actor.publicId()), body, traceId),
                 OrderView.class
         );
     }
 
     public OrderView get(String publicId) {
         return loadOrder(requireText(publicId, "publicId", 64), false);
+    }
+
+    public PageResult<OrderView> list(String enterpriseId, String status, int page, int pageSize) {
+        if (page < 1 || pageSize < 1 || pageSize > 100) {
+            throw new PlatformApiException(ErrorCode.INVALID_REQUEST, "page 必须大于 0，pageSize 必须介于 1 和 100 之间");
+        }
+        String enterpriseFilter = trimToNull(enterpriseId);
+        String statusFilter = trimToNull(status);
+        if (statusFilter != null && !Set.of("PENDING_PAYMENT", "PAID", "FULFILLING", "FULFILLED", "FULFILLMENT_FAILED", "MANUAL_REVIEW", "REFUND_PENDING", "REFUNDED", "CANCELLED").contains(statusFilter)) {
+            throw new PlatformApiException(ErrorCode.INVALID_REQUEST, "订单状态无效");
+        }
+        String where = " WHERE 1=1" + (enterpriseFilter == null ? "" : " AND e.public_id = :enterpriseId") + (statusFilter == null ? "" : " AND o.status = :status");
+        var countQuery = jdbcClient.sql("SELECT COUNT(*) FROM pf_subscription_order o JOIN pf_enterprise e ON e.id=o.enterprise_id" + where);
+        var pageQuery = jdbcClient.sql("SELECT o.public_id" + " FROM pf_subscription_order o JOIN pf_enterprise e ON e.id=o.enterprise_id" + where + " ORDER BY o.created_at DESC,o.id DESC LIMIT :limit OFFSET :offset");
+        if (enterpriseFilter != null) { countQuery = countQuery.param("enterpriseId", enterpriseFilter); pageQuery = pageQuery.param("enterpriseId", enterpriseFilter); }
+        if (statusFilter != null) { countQuery = countQuery.param("status", statusFilter); pageQuery = pageQuery.param("status", statusFilter); }
+        long total = countQuery.query(Long.class).single();
+        List<OrderView> items = pageQuery.param("limit", pageSize).param("offset", (page - 1) * pageSize)
+                .query(String.class).list().stream().map(id -> loadOrder(id, false)).toList();
+        return new PageResult<>(items, total, page, pageSize);
+    }
+
+    public OrderView editPending(String publicId, CreateOrderCommand command, PlatformPrincipal actor, String requestBody, String traceId) {
+        String normalizedPublicId = requireText(publicId, "publicId", 64);
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            OrderRow order = lockOrder(normalizedPublicId);
+            if(jdbcClient.sql("SELECT COUNT(*) FROM pf_sale_coupon WHERE reserved_order_id=:id AND status='RESERVED'").param("id",order.id()).query(Long.class).single()>0) {
+                throw new PlatformApiException(ErrorCode.CONFLICT,"使用优惠券的订单请取消后重新下单，不能直接修改金额");
+            }
+            if (!"PENDING_PAYMENT".equals(order.status())) {
+                throw stateConflict(order.status(), "EDITED");
+            }
+            if (!order.enterpriseId().equals(requireText(command.enterpriseId(), "enterpriseId", 64))) {
+                throw new PlatformApiException(ErrorCode.INVALID_REQUEST, "不能将订单转移到其他企业");
+            }
+            String planCode = trimToNull(command.planCode());
+            OrderQuoteService.QuoteView quote = quoteService.quote(new OrderQuoteService.QuoteCommand(
+                    order.enterpriseId(), planCode, command.items() == null ? List.of() : List.copyOf(command.items()), command.period()));
+            Long planId = planCode == null ? null : findPlanId(planCode);
+            Instant now = clock.now();
+            jdbcClient.sql("UPDATE pf_subscription_order SET plan_id=:planId,currency=:currency,original_amount=:originalAmount,deduction_amount=:deductionAmount,payable_amount=:payableAmount,request_hash=:requestHash,updated_at=:updatedAt,version=version+1 WHERE id=:orderId AND status='PENDING_PAYMENT'")
+                    .param("planId", planId, Types.BIGINT).param("currency", quote.currency())
+                    .param("originalAmount", quote.originalAmount()).param("deductionAmount", quote.deductionAmount())
+                    .param("payableAmount", quote.payableAmount()).param("requestHash", sha256(requestBody == null ? "" : requestBody))
+                    .param("updatedAt", Timestamp.from(now)).param("orderId", order.id()).update();
+            jdbcClient.sql("DELETE FROM pf_subscription_order_item WHERE order_id=:orderId").param("orderId", order.id()).update();
+            insertOrderItems(order.id(), quote);
+            auditService.record(actor.userId(), actor.publicId(), "ORDER_PENDING_EDITED", "SUBSCRIPTION_ORDER", normalizedPublicId,
+                    toJson(Map.of("planCode", planCode == null ? "" : planCode, "itemCount", quote.items().size(), "payableAmount", quote.payableAmount().toPlainString())), traceId);
+            return loadOrder(normalizedPublicId, false);
+        }), "editPending must return an order");
+    }
+
+    public OrderView changeModuleAuthorization(String publicId, String moduleCode, String reason, boolean restore,
+                                               PlatformPrincipal actor, String traceId) {
+        String normalizedPublicId = requireText(publicId, "publicId", 64);
+        String normalizedCode = requireText(moduleCode, "moduleCode", 40);
+        String normalizedReason = requireText(reason, "reason", 500);
+        return Objects.requireNonNull(transactionTemplate.execute(status -> {
+            OrderRow order = lockOrder(normalizedPublicId);
+            if (!"FULFILLED".equals(order.status())) {
+                throw stateConflict(order.status(), restore ? "RESTORED" : "REVOKED");
+            }
+            long orderId = jdbcClient.sql("SELECT id FROM pf_subscription_order WHERE public_id=:publicId")
+                    .param("publicId", normalizedPublicId).query(Long.class).single();
+            OrderAuthorizationItem item = jdbcClient.sql("""
+                            SELECT id, entitlement_result, revoked_from_entitlement_result
+                            FROM pf_subscription_order_item
+                            WHERE order_id=:orderId AND module_code=:moduleCode
+                            FOR UPDATE
+                            """)
+                    .param("orderId", orderId)
+                    .param("moduleCode", normalizedCode)
+                    .query((rs, rowNum) -> new OrderAuthorizationItem(
+                            rs.getLong("id"),
+                            rs.getString("entitlement_result"),
+                            rs.getString("revoked_from_entitlement_result")
+                    ))
+                    .optional()
+                    .orElseThrow(() -> new PlatformApiException(ErrorCode.NOT_FOUND, "订单中不存在该模块"));
+
+            String previousResult;
+            String nextResult;
+            if (restore) {
+                if (!"REVOKED".equals(item.entitlementResult()) || item.revokedFromResult() == null) {
+                    throw new PlatformApiException(ErrorCode.ORDER_STATE_CONFLICT, "该模块授权当前未被此订单撤销");
+                }
+                previousResult = item.revokedFromResult();
+                nextResult = previousResult;
+            } else {
+                if (!Set.of("APPLIED", "RENEWED", "UPGRADED_PERPETUAL").contains(item.entitlementResult())) {
+                    throw new PlatformApiException(ErrorCode.ORDER_STATE_CONFLICT, "该订单项没有可撤销的有效模块授权");
+                }
+                previousResult = item.entitlementResult();
+                nextResult = "REVOKED";
+            }
+
+            long enterprisePk = findEnterprisePk(order.enterpriseId());
+            long entitlementId = jdbcClient.sql("""
+                            SELECT e.id
+                            FROM pf_entitlement e
+                            JOIN pf_module_definition m ON m.id=e.module_id
+                            WHERE e.enterprise_id=:enterpriseId AND m.code=:moduleCode AND e.source_order_id=:orderId
+                            FOR UPDATE
+                            """)
+                    .param("enterpriseId", enterprisePk)
+                    .param("moduleCode", normalizedCode)
+                    .param("orderId", orderId)
+                    .query(Long.class)
+                    .optional()
+                    .orElseThrow(() -> new PlatformApiException(
+                            ErrorCode.ORDER_STATE_CONFLICT,
+                            "该订单已不再是此模块授权的当前来源"
+                    ));
+
+            jdbcClient.sql("UPDATE pf_entitlement SET status=:status,version=version+1,updated_at=:now WHERE id=:id")
+                    .param("status", restore ? "ACTIVE" : "SUSPENDED")
+                    .param("now", Timestamp.from(clock.now()))
+                    .param("id", entitlementId)
+                    .update();
+            jdbcClient.sql("""
+                            UPDATE pf_subscription_order_item
+                            SET entitlement_result=:result, revoked_from_entitlement_result=:revokedFrom
+                            WHERE id=:id
+                            """)
+                    .param("result", nextResult)
+                    .param("revokedFrom", restore ? null : previousResult, Types.VARCHAR)
+                    .param("id", item.id())
+                    .update();
+            auditService.record(
+                    actor.userId(), actor.publicId(),
+                    restore ? "ORDER_MODULE_AUTHORIZATION_RESTORED" : "ORDER_MODULE_AUTHORIZATION_REVOKED",
+                    "SUBSCRIPTION_ORDER_ITEM", normalizedPublicId,
+                    toJson(Map.of("moduleCode", normalizedCode, "reason", normalizedReason)), traceId
+            );
+            jdbcClient.sql("SELECT id FROM pf_deployment_instance WHERE enterprise_id=:enterpriseId ORDER BY id")
+                    .param("enterpriseId", enterprisePk)
+                    .query(Long.class)
+                    .list()
+                    .forEach(id -> entitlementService.issueLicenseForInstance(id, traceId));
+            return loadOrder(normalizedPublicId, false);
+        }), "changeModuleAuthorization must return an order");
     }
 
     public OrderView retryFulfillment(
@@ -146,6 +288,9 @@ public class SalesOrderService {
             PlatformPrincipal actor,
             String traceId
     ) {
+        return paySimulatedAs(publicId,command,new OrderActor(actor.userId(),actor.publicId()),traceId);
+    }
+    private OrderView paySimulatedAs(String publicId,PayCommand command,OrderActor actor,String traceId) {
         Objects.requireNonNull(command, "command must not be null");
         Objects.requireNonNull(actor, "actor must not be null");
         String normalizedPublicId = requireText(publicId, "publicId", 64);
@@ -204,6 +349,7 @@ public class SalesOrderService {
                 );
             }
             transition(order, "PAID", "paid_at", now);
+            jdbcClient.sql("UPDATE pf_sale_coupon SET status='USED' WHERE reserved_order_id=:id AND status='RESERVED'").param("id",order.id()).update();
             auditService.record(
                     actor.userId(),
                     actor.publicId(),
@@ -272,7 +418,7 @@ public class SalesOrderService {
 
     private OrderView createInternal(
             CreateOrderCommand command,
-            PlatformPrincipal actor,
+            OrderActor actor,
             String requestBody,
             String traceId
     ) {
@@ -289,6 +435,8 @@ public class SalesOrderService {
                         command.period()
                 )
         );
+        String couponCode = couponCode(requestBody);
+        if (couponCode != null) quote = applyCoupon(quote, couponCode);
         long enterprisePk = findEnterprisePk(enterpriseId);
         Long planId = planCode == null ? null : findPlanId(planCode);
         Instant now = clock.now();
@@ -317,7 +465,7 @@ public class SalesOrderService {
                 .param("deductionAmount", quote.deductionAmount())
                 .param("payableAmount", quote.payableAmount())
                 .param("requestHash", sha256(requestBody))
-                .param("createdBy", actor.userId())
+                .param("createdBy", actor.userId(), Types.BIGINT)
                 .param("createdAt", Timestamp.from(now))
                 .param("updatedAt", Timestamp.from(now))
                 .update();
@@ -327,6 +475,96 @@ public class SalesOrderService {
                 .param("publicId", publicId)
                 .query(Long.class)
                 .single();
+        insertOrderItems(orderPk, quote);
+        if (couponCode != null) {
+            int reserved = jdbcClient.sql("UPDATE pf_sale_coupon SET status='RESERVED',reserved_order_id=:id WHERE code=:code AND status='AVAILABLE'")
+                    .param("id",orderPk).param("code",couponCode).update();
+            if(reserved!=1)throw new PlatformApiException(ErrorCode.CONFLICT,"优惠券已被其他订单占用");
+            jdbcClient.sql("UPDATE pf_subscription_order SET coupon_code=:code WHERE id=:id").param("code",couponCode).param("id",orderPk).update();
+        }
+
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("planCode", planCode);
+        detail.put("itemCount", quote.items().size());
+        detail.put("payableAmount", quote.payableAmount().toPlainString());
+        auditService.record(
+                actor.userId(),
+                actor.publicId(),
+                "ORDER_CREATED",
+                "SUBSCRIPTION_ORDER",
+                publicId,
+                toJson(detail),
+                traceId
+        );
+        return loadOrder(publicId, false);
+    }
+
+    public OrderView cancelPending(String publicId,PlatformPrincipal actor,String traceId) {
+        return cancelPendingAs(publicId,new OrderActor(actor.userId(),actor.publicId()),traceId);
+    }
+    private OrderView cancelPendingAs(String publicId,OrderActor actor,String traceId) {
+        return Objects.requireNonNull(transactionTemplate.execute(tx -> {
+            OrderRow order=lockOrder(requireText(publicId,"publicId",64));
+            transition(order,"CANCELLED",null,clock.now());
+            jdbcClient.sql("UPDATE pf_sale_coupon SET status='AVAILABLE',reserved_order_id=NULL WHERE reserved_order_id=:id AND status='RESERVED'").param("id",order.id()).update();
+            auditService.record(actor.userId(),actor.publicId(),"ORDER_CANCELLED","SUBSCRIPTION_ORDER",publicId,null,traceId);
+            return loadOrder(publicId,false);
+        }));
+    }
+
+    private String couponCode(String body) {
+        try {var json=objectMapper.readTree(body); if(json==null)return null; String value=json.path("couponCode").asText("").trim();return value.isEmpty()?null:requireText(value,"couponCode",64);}
+        catch(JsonProcessingException e){throw new PlatformApiException(ErrorCode.INVALID_REQUEST,"请求格式错误",e);}
+    }
+
+    private OrderQuoteService.QuoteView applyCoupon(OrderQuoteService.QuoteView quote,String code) {
+        var coupon=jdbcClient.sql("SELECT type,coupon_value,minimum_amount FROM pf_sale_coupon WHERE code=:code AND status='AVAILABLE' AND expires_at>:now FOR UPDATE")
+                .param("code",code).param("now",Timestamp.from(clock.now())).query().listOfRows().stream().findFirst()
+                .orElseThrow(()->new PlatformApiException(ErrorCode.CONFLICT,"优惠券不可用、已过期或已被占用"));
+        BigDecimal base=quote.payableAmount();
+        if(base.compareTo((BigDecimal)coupon.get("minimum_amount"))<0)throw new PlatformApiException(ErrorCode.INVALID_REQUEST,"未达到优惠券最低消费");
+        BigDecimal value=(BigDecimal)coupon.get("coupon_value");
+        BigDecimal after="DISCOUNT".equals(coupon.get("type"))?base.multiply(value).divide(new BigDecimal("100"),2,java.math.RoundingMode.HALF_UP):base.subtract(value).max(BigDecimal.ZERO);
+        BigDecimal remaining=base.subtract(after);
+        List<OrderQuoteService.QuoteItemView> adjusted=new ArrayList<>();
+        for(var item:quote.items()){
+            BigDecimal discount=item.actualAmount().min(remaining);remaining=remaining.subtract(discount);
+            adjusted.add(new OrderQuoteService.QuoteItemView(item.moduleId(),item.moduleCode(),item.moduleName(),item.billingMode(),item.durationDays(),item.storeQuota(),item.currency(),item.standardAmount(),item.deductionAmount().add(discount),item.actualAmount().subtract(discount),item.currentExpiresAt(),item.projectedExpiresAt(),item.entitlementEffect()));
+        }
+        return new OrderQuoteService.QuoteView(quote.enterpriseId(),quote.planCode(),quote.currency(),quote.originalAmount(),quote.deductionAmount().add(base.subtract(after)),after,List.copyOf(adjusted));
+    }
+
+    private record OrderActor(Long userId,String publicId) {}
+
+    public OrderQuoteService.QuoteView quoteForEnterprise(CreateOrderCommand command,String couponCode) {
+        return transactionTemplate.execute(tx -> {
+            var quote=quoteService.quote(new OrderQuoteService.QuoteCommand(command.enterpriseId(),command.planCode(),command.items(),command.period()));
+            return couponCode==null||couponCode.isBlank()?quote:applyCoupon(quote,requireText(couponCode,"couponCode",64));
+        });
+    }
+    public OrderView createFromInstance(CreateOrderCommand command,long instanceId,String instancePublicId,String key,String body,String traceId) {
+        String normalized=requireText(key,"Idempotency-Key",80);
+        return idempotencyService.execute("enterprise.order."+command.enterpriseId(),normalized,"POST","/enterprise/orders",body,()->{
+            var order=createInternal(command,new OrderActor(null,"INSTANCE:"+instancePublicId),body,traceId);
+            jdbcClient.sql("UPDATE pf_subscription_order SET source_instance_id=:instance WHERE public_id=:id").param("instance",instanceId).param("id",order.publicId()).update();
+            return order;
+        },OrderView.class);
+    }
+    public OrderView getForEnterprise(String id,String enterpriseId) {
+        OrderView order=get(id);
+        if(!order.enterpriseId().equals(enterpriseId))throw new PlatformApiException(ErrorCode.ORDER_NOT_FOUND,"销售订单不存在");
+        return order;
+    }
+    public OrderView payFromInstance(String id,String enterpriseId,String instancePublicId,String traceId) {
+        getForEnterprise(id,enterpriseId);
+        return paySimulatedAs(id,new PayCommand("MOCK","INSTANCE-MOCK-"+id),new OrderActor(null,"INSTANCE:"+instancePublicId),traceId);
+    }
+    public OrderView cancelFromInstance(String id,String enterpriseId,String instancePublicId,String traceId) {
+        getForEnterprise(id,enterpriseId);
+        return cancelPendingAs(id,new OrderActor(null,"INSTANCE:"+instancePublicId),traceId);
+    }
+
+    private void insertOrderItems(long orderPk, OrderQuoteService.QuoteView quote) {
         for (OrderQuoteService.QuoteItemView item : quote.items()) {
             jdbcClient.sql("""
                             INSERT INTO pf_subscription_order_item(
@@ -354,21 +592,6 @@ public class SalesOrderService {
                             : "SKIPPED_EXISTING")
                     .update();
         }
-
-        Map<String, Object> detail = new LinkedHashMap<>();
-        detail.put("planCode", planCode);
-        detail.put("itemCount", quote.items().size());
-        detail.put("payableAmount", quote.payableAmount().toPlainString());
-        auditService.record(
-                actor.userId(),
-                actor.publicId(),
-                "ORDER_CREATED",
-                "SUBSCRIPTION_ORDER",
-                publicId,
-                toJson(detail),
-                traceId
-        );
-        return loadOrder(publicId, false);
     }
 
     private OrderRow lockOrder(String publicId) {
@@ -660,6 +883,9 @@ public class SalesOrderService {
     ) {
     }
 
+    private record OrderAuthorizationItem(long id, String entitlementResult, String revokedFromResult) {
+    }
+
     public record PaymentView(
             String publicId,
             String channel,
@@ -697,4 +923,6 @@ public class SalesOrderService {
             List<RefundView> refunds
     ) {
     }
+
+    public record PageResult<T>(List<T> items, long total, int page, int pageSize) {}
 }

@@ -27,18 +27,19 @@ export default function PlatformLoginPage() {
   }
 
   return (
-    <main className="login-frame">
+    <main className="login-frame"><aside className="login-story"><div><span className="console-label">养老云 · 平台控制台</span><h2>连接企业，<br />管理服务的每一步。</h2><p>企业授权 / 模块销售 / 版本发布</p><p className="console-footnote">平台运营管理员统一入口</p></div></aside>
       <section className="login-panel">
         <div className="login-heading"><span className="platform-mark">养</span><div><p>PLATFORM CONTROL</p><h1>平台总管理端登录</h1></div></div>
+        <p className="login-intro">使用平台管理员账号，进入授权与版本管理工作区。</p>
         <form onSubmit={event => void submit(event)}>
           <label htmlFor="platform-username">管理员账号</label>
-          <input id="platform-username" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required />
+          <input id="platform-username" placeholder="请输入管理员账号" autoComplete="username" value={username} onChange={event => setUsername(event.target.value)} required />
           <label htmlFor="platform-password">密码</label>
-          <input id="platform-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
+          <input id="platform-password" type="password" placeholder="请输入登录密码" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
           {(formError || error) && <p className="form-error" role="alert">{formError || error}</p>}
           <button className="primary-action" type="submit" disabled={busy}>{busy ? '正在登录…' : '登录'}</button>
         </form>
-        <footer>平台控制面 · 仅限平台授权管理员</footer>
+        <footer>平台控制面 · 仅限平台授权管理员<br /><a href="/register-enterprise">企业自助登记</a></footer>
       </section>
     </main>
   )

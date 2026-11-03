@@ -24,6 +24,23 @@ public class JdbcTenantIamRepository {
 
     public JdbcTenantIamRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
 
+    public Set<String> groupPermissionCodes(long id) {
+        return Set.copyOf(jdbc.sql("SELECT d.permission_code FROM iam_permission_group_item m JOIN iam_permission_definition d ON d.id=m.permission_definition_id WHERE m.permission_group_id=:id").param("id",id).query(String.class).list());
+    }
+    public Set<String> roleGroupCodes(long id) {
+        return Set.copyOf(jdbc.sql("SELECT g.group_code FROM iam_role_permission_group r JOIN iam_permission_group g ON g.id=r.permission_group_id WHERE r.role_id=:id").param("id",id).query(String.class).list());
+    }
+    public Map<String,String> roleEffects(long id) {
+        Map<String,String> result=new java.util.LinkedHashMap<>();
+        jdbc.sql("SELECT d.permission_code,r.effect FROM iam_role_permission r JOIN iam_permission_definition d ON d.id=r.permission_definition_id WHERE r.role_id=:id").param("id",id).query((rs,n)->{result.put(rs.getString(1),rs.getString(2));return rs.getString(1);}).list();
+        return result;
+    }
+
+    public Set<String> staffRoleCodes(long id) {return Set.copyOf(jdbc.sql("SELECT r.role_code FROM iam_staff_role s JOIN iam_role r ON r.id=s.role_id WHERE s.staff_id=:id").param("id",id).query(String.class).list());}
+    public String staffScopeType(long id) {return jdbc.sql("SELECT scope_type FROM iam_staff_scope_config WHERE staff_id=:id").param("id",id).query(String.class).optional().orElse("SELF");}
+    public Set<String> staffStorePublicIds(long id) {return Set.copyOf(jdbc.sql("SELECT s.public_id FROM iam_staff_store_scope c JOIN core_store s ON s.id=c.store_id WHERE c.staff_id=:id").param("id",id).query(String.class).list());}
+    public Set<String> staffGroupPublicIds(long id) {return Set.copyOf(jdbc.sql("SELECT g.public_id FROM iam_staff_store_group_scope c JOIN iam_store_group g ON g.id=c.store_group_id WHERE c.staff_id=:id").param("id",id).query(String.class).list());}
+
     public Set<String> activePermissionCodes() {
         return Set.copyOf(jdbc.sql("SELECT permission_code FROM iam_permission_definition WHERE active = TRUE")
                 .query(String.class).list());

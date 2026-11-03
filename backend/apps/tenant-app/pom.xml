@@ -14,6 +14,8 @@
     <name>tenant-app</name>
 
     <dependencies>
+        <dependency><groupId>com.smartelder</groupId><artifactId>care-module-runtime</artifactId><version>${project.version}</version></dependency>
+        <dependency><groupId>com.smartelder</groupId><artifactId>care-module-package</artifactId><version>${project.version}</version></dependency>
         <dependency>
             <groupId>com.smartelder</groupId>
             <artifactId>care-common</artifactId>
@@ -53,10 +55,6 @@
         <dependency>
             <groupId>com.smartelder</groupId>
             <artifactId>community-impl</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.smartelder</groupId>
-            <artifactId>membership-impl</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

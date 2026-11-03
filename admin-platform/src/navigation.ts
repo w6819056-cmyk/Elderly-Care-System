@@ -6,7 +6,11 @@ export interface PlatformNavigationItem {
 }
 
 export const PLATFORM_NAVIGATION: PlatformNavigationItem[] = [
-  { key: 'home', label: '工作台', path: '/', requiredPermission: null }
+  { key: 'home', label: '工作台', path: '/', requiredPermission: null },
+  { key: 'enterprises', label: '企业管理', path: '/enterprises', requiredPermission: 'platform.enterprise.view' },
+  { key: 'modules', label: '模块中心', path: '/modules', requiredPermission: 'platform.module.view' },
+  { key: 'module-shop', label: '模块售卖', path: '/module-shop', requiredPermission: 'platform.module.view' },
+  { key: 'sales', label: '销售授权', path: '/sales', requiredPermission: 'platform.order.view' }
 ]
 
 export function filterPlatformNavigation(

@@ -13,6 +13,7 @@
     <name>care-core</name>
     <description>Core implementation</description>
     <dependencies>
+        <dependency><groupId>com.smartelder</groupId><artifactId>care-module-package</artifactId><version>${project.version}</version></dependency>
         <dependency>
             <groupId>com.smartelder</groupId>
             <artifactId>care-core-api</artifactId>

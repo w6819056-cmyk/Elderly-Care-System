@@ -17,6 +17,7 @@ import com.smartelder.platform.core.commerce.PlanService;
 import com.smartelder.platform.core.commerce.SalesOrderService;
 import com.smartelder.platform.core.enterprise.ActivationService;
 import com.smartelder.platform.core.enterprise.EnterpriseService;
+import com.smartelder.platform.core.enterprise.EnterpriseEntitlementService;
 import com.smartelder.platform.core.enterprise.InstanceRequestVerifier;
 import com.smartelder.platform.core.enterprise.InstanceService;
 import com.smartelder.platform.core.enterprise.HeartbeatService;
@@ -127,6 +128,12 @@ public class PlatformCoreConfiguration {
             PlatformAuditService auditService
     ) {
         return new EnterpriseService(jdbcClient, clock, auditService);
+    }
+
+    @Bean
+    EnterpriseEntitlementService platformEnterpriseEntitlementService(JdbcClient jdbcClient, PlatformClock clock,
+            PlatformAuditService auditService, LicenseIssueService licenseIssueService, PlatformTransactionManager manager) {
+        return new EnterpriseEntitlementService(jdbcClient, clock, auditService, licenseIssueService, manager);
     }
 
     @Bean

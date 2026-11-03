@@ -23,6 +23,8 @@
         <module>libs/care-core-api</module>
         <module>libs/care-business-api</module>
         <module>libs/care-module-api</module>
+        <module>libs/care-module-package</module>
+        <module>libs/care-module-runtime</module>
         <module>core/care-core</module>
         <module>core/care-business</module>
         <module>modules/institution/institution-api</module>
@@ -35,6 +37,7 @@
         <module>platform/platform-licensing</module>
         <module>apps/platform-app</module>
         <module>apps/tenant-app</module>
+        <module>apps/installer-app</module>
         <module>tests/architecture-tests</module>
     </modules>
 

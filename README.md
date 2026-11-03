@@ -1,183 +1,178 @@
-# 综合智慧养老平台
+# 模块化智慧养老管理系统
 
-按《综合智慧养老平台软件需求规格说明书》V1.0 实现的一期核心链路系统。
+面向养老机构、社区居家服务与连锁门店的模块化管理项目，由小组协作开发。项目采用**同一仓库、两个独立构建与部署的系统**：平台负责企业登记、软件销售与模块授权，企业系统负责总部、门店和客户的业务运营。
 
-- `backend/`　Spring Boot 3 + MyBatis-Plus 后端服务（Java 17）
-- `admin-platform/`　React 18 + TypeScript 平台总管理端（独立构建，平台侧部署）
-- `admin-tenant/`　 React 18 + TypeScript 企业总部/门店管理端（独立构建，客户侧部署）
-- `admin/`　　　　旧版一期管理端（机构/服务商端 + 平台运营端，兼容演示与回归）
-- `miniprogram/`　微信小程序（老人端 + 家属端）
-- `docs/`　　　接口清单、需求追溯表、部署说明
+当前处于开发与联调阶段。仓库同时保留一期养老业务和小程序源码，不能将目录存在视为所有功能已完成产品化。
 
-> 工程正在迁移为模块化多企业 SaaS 架构。现有单租户程序已迁入
-> `backend/apps/tenant-app`，平台控制面位于 `backend/apps/platform-app`。
-> 新管理端为同仓库内两个独立构建、独立部署的系统：`admin-platform/` 由我们托管，`admin-tenant/` 随企业系统部署在客户侧。阶段 1 本地验收记录见 `docs/阶段1验收记录.md`；阶段 2A 企业组织与权限底座已本地验收，记录见 `docs/阶段2A验收记录.md`。
+## 系统架构
 
+```text
+平台侧基础设施                         客户企业基础设施
+┌──────────────────────┐              ┌────────────────────────┐
+│ 平台总管理端          │              │ 企业总部管理端          │
+│ admin-platform       │              │ 门店管理端 / 用户网站   │
+│          ↓           │  激活、授权   │ admin-tenant            │
+│ platform-app         │ ←──────────→ │          ↓              │
+│          ↓           │  模块包交付   │ tenant-app              │
+│ 平台独立数据库        │              │          ↓              │
+└──────────────────────┘              │ 企业独立业务数据库      │
+                                      └────────────────────────┘
+```
 
-## 一期交付范围
+- **平台总端**由项目运营方部署，管理企业、销售商品、订单、许可证和模块版本。
+- **企业总部端**是客户的总管理端，负责旗下门店、员工、角色权限、模块购买与分配；总部本身不是门店。
+- **门店管理端**使用独立门店登录入口，办理本店业务；总部与门店在企业系统内共享基础服务。
+- **用户网站**展示企业品牌和门店信息，支持注册登录、咨询与到店参观预约、查看自己的预约。
+- 企业客户的账号、联系方式与业务记录保存在企业数据库，不上传平台授权系统。平台权限域与企业权限域分离。
 
-| 模块 | 已实现 | 对应需求编号 |
-| --- | --- | --- |
-| 账号与权限 | 注册登录、JWT 鉴权、RBAC、账号停用 | USR-01、OP-01、OP-07 |
-| 家属绑定 | 双向确认绑定、授权范围校验 | USR-02、USR-03 |
-| 健康管理 | 电子健康档案、体征上报与趋势、阈值异常提示、用药计划、家属代设置 | HC-01、HC-02、HC-05~HC-09 |
-| 安全监护 | SOS 一键呼叫、跌倒/围栏/久未活动事件接入、红黄蓝分级、处置闭环 | SA-01、SA-04~SA-10 |
-| 家人互联 | 老人状态面板、告警联动、代下单 | FM-01、FM-05、FM-06、FM-08 |
-| 服务调度 | 服务目录、下单预约、派单规则、订单状态机、上门打卡、评价、退款 | SV-01、SV-02、SV-05~SV-15 |
-| 运营中台 | 服务商审核、项目审核、订单监控、数据大屏、用户管理 | OP-02~OP-06、OP-08~OP-12 |
-| 消息通知 | 告警/服务/系统三类消息、分级触达、渠道扩展点、已读记录 | MSG-01~MSG-05 |
+## 当前功能
 
-未纳入一期的部分（文档中标注二期/三期或占位）：视频探望（FM-02/FM-07）、兴趣社群与志愿互助（CM-04/CM-05）、真实微信支付与短信网关对接、真实 IoT 设备接入。代码中均留有扩展点，见 `docs/接口清单.md` 的"扩展点"章节。
+| 范围 | 已接入的能力 |
+| --- | --- |
+| 平台管理 | 企业自主登记与平台审核、企业资料管理、实例激活、授权期限与门店额度管理 |
+| 模块交付 | 模块目录、包校验、版本上传与发布、企业下载和安装计划、安装确认及运行时接入 |
+| 销售管理 | 单模块商品定价、套餐组合、售卖卡片编辑与预览、折扣券与抵扣券、优惠券码 |
+| 订单授权 | 企业报价与下单、订单查询、待支付订单修改与取消、模拟支付、模块授权撤销与恢复 |
+| 企业组织 | 门店管理、员工管理、入职申请与审批、自定义角色及权限组、指定门店数据范围 |
+| 企业运营 | 品牌首页维护、门店首页编辑及总部审核、咨询和参观预约管理 |
+| 客户管理 | 客户卡片、搜索、分页、资料及预约详情；总部按范围查看、门店仅查看本店关联客户 |
+| 用户网站 | 企业与门店展示、账号注册登录、持久化预约记录、个人中心 |
+| 会员模块 | 会员等级与权益说明、总部开通及调整会员、门店最小会员卡查询、用户查看本人会员信息 |
 
-## 新管理端（双系统）
+会员模块需要有效授权、安装、启用及员工权限配置，不随普通用户注册自动开通。积分、储值、自动折扣和权益核销不属于当前会员模块已交付范围。
 
-平台管理端与企业租户管理端分别构建、发布。平台管理端连接平台控制面；企业管理端（总部/门店工作台）连接客户自己部署的租户服务。两个前端不共用登录会话。
+模块销售当前使用本地模拟支付验证流程，**尚未完成微信支付、支付宝、银联等真实支付渠道对接**。完整系统升级、更多养老业务模块及第三方设备接入仍需继续开发和验证。
 
-运行两个新管理端的开发服务器、测试与构建需要 Node.js 20 或更高版本。
+## 模块化规则
 
-启动前分别准备平台 API（默认 `http://localhost:8081`）和租户 API（默认 `http://localhost:8082`）。两个开发服务器均将 `/api` 代理到对应 API：
+免费基础底座提供组织、身份、权限、网站及基础客户管理。业务模块通过独立模块包交付，模块自行维护清单、前后端资源和增量数据库迁移，通过底座接口关联基础数据。
+
+典型使用流程：
+
+```text
+企业登记并通过审核 → 实例激活 → 购买模块或套餐 → 同步授权
+→ 下载模块并由总部确认安装 → 启用模块 → 分配门店名额与员工权限
+```
+
+- 套餐由多个模块组成，模块名额分别计算，在分配时占用。
+- 必需依赖需满足正式授权条件；试用不替代正式依赖授权。
+- 正常有效授权续费叠加剩余期限；撤销后重新购买不叠加被撤销的期限。
+- 门店停用不自动回收名额，由总部手动撤销分配。
+- 联网时通过签名协议同步许可证；离线使用受本地已验证许可证及离线策略约束，不承诺无限期离线授权。
+
+具体模块协议、安装前提及权限以 [模块包规范](docs/platform/模块包规范-v1.md) 和 [会员模块使用说明](docs/platform/会员模块使用说明.md) 为准。
+
+## 仓库结构
+
+```text
+admin-platform/              平台总管理端（React + TypeScript）
+admin-tenant/                企业总部、门店工作台与用户网站
+backend/
+  apps/platform-app/         平台 API
+  apps/tenant-app/           企业 API
+  apps/installer-app/        安装执行器相关工程
+  core/                     组织权限和基础业务
+  libs/                     公共协议、模块包及运行时基础设施
+  modules/                  会员、机构康养、社区居家等模块工程
+  platform/                 平台管理与许可证服务
+  tests/architecture-tests/  架构边界测试
+admin/                       一期旧版管理端，保留兼容与回归用途
+miniprogram/                 一期微信小程序源码
+examples/                    模块接入示例
+scripts/                     构建、验证及冒烟脚本
+docs/                        设计、接口、部署与开发交接文档
+```
+
+## 技术栈
+
+- 后端：Java 17、Spring Boot 3.3、Spring Security、MyBatis-Plus、Spring JDBC。
+- 存储与迁移：MySQL 8、Flyway；自动化测试使用 H2。
+- 前端：React 18、TypeScript、Vite、React Router。
+- 验证：JUnit、Spring Boot Test、ArchUnit、Vitest、Testing Library。
+- 安全与交付：JWT、角色与数据范围校验、签名许可证、模块包校验及增量迁移。
+
+## 本地开发
+
+### 环境
+
+JDK 17、Maven 3.8+、Node.js 20+、MySQL 8，以及 Git。以下命令从仓库根目录执行。
+
+### 后端构建与配置
 
 ```powershell
-# 平台管理端，默认 http://localhost:5174
-npm --prefix admin-platform install
-npm --prefix admin-platform run dev
+mvn -f backend/pom.xml -pl apps/platform-app,apps/tenant-app -am package -DskipTests
+```
 
-# 企业总部/门店管理端，默认 http://localhost:5175
-npm --prefix admin-tenant install
+平台与企业使用两个独立数据库。先创建空数据库，再通过外部配置提供连接信息，由 Flyway 执行迁移；不要向新架构数据库手动导入一期演示 SQL。
+
+| 服务 | 配置要求 |
+| --- | --- |
+| 平台 | `PLATFORM_DB_URL`、`PLATFORM_DB_USERNAME`、`PLATFORM_DB_PASSWORD`、`PLATFORM_JWT_SECRET`、`PLATFORM_LICENSE_SIGNING_PRIVATE_KEY` |
+| 平台初始化管理员 | `PLATFORM_BOOTSTRAP_ADMIN_USERNAME`、`PLATFORM_BOOTSTRAP_ADMIN_PASSWORD`；仅首次初始化生效 |
+| 企业 | 外部配置中的 `spring.datasource.url`、`spring.datasource.username`；密码可设置 `TENANT_DB_PASSWORD` 或外部 `spring.datasource.password` |
+| 企业认证 | `TENANT_STAFF_JWT_SECRET`、`APP_JWT_SECRET`，部署时设置独立随机值 |
+| 企业首次初始化 | `TENANT_BOOTSTRAP_ENABLED`、`TENANT_ORG_NO`、`TENANT_ENTERPRISE_NAME`、`TENANT_OWNER_ACCOUNT`、`TENANT_OWNER_DISPLAY_NAME`、`TENANT_OWNER_PASSWORD` |
+| 企业授权连接 | 激活信息、企业实例密钥、平台地址与受信任公钥，详见服务配置和安装文档 |
+
+将真实密码与密钥保存在仓库外。例如使用绝对路径指定外部配置：
+
+```powershell
+java -jar backend/apps/platform-app/target/platform-app-2.0.0-SNAPSHOT.jar --spring.config.additional-location=file:C:/your-config/platform.yml
+java -jar backend/apps/tenant-app/target/tenant-app-2.0.0-SNAPSHOT.jar --spring.config.additional-location=file:C:/your-config/tenant.properties
+```
+
+默认平台 API 端口为 `8081`，企业 API 为 `8082`。首次企业初始化完成后关闭引导开关。项目不提供通用生产账号，本机预览账号不会随源码发布。
+
+> **不要使用 `dev` profile 启动已有业务数据库。** 一期开发配置包含 DROP 和演示数据初始化逻辑，可能覆盖数据。生产或持续联调环境应使用外部配置、Flyway 增量迁移及独立备份。
+
+### 前端启动
+
+分别在两个终端执行：
+
+```powershell
+npm --prefix admin-platform ci
+npm --prefix admin-platform run dev
+```
+
+```powershell
+npm --prefix admin-tenant ci
 npm --prefix admin-tenant run dev
 ```
 
-分别独立构建生产静态资源：
+| 页面 | 默认地址 |
+| --- | --- |
+| 平台管理登录 | http://localhost:5174/login |
+| 企业总部登录 | http://localhost:5175/hq/login |
+| 门店员工登录 | http://localhost:5175/store-admin/门店编号/login |
+| 企业品牌网站 | http://localhost:5175/brand |
+| 门店用户网站 | http://localhost:5175/stores/门店编号 |
+| 用户个人中心 | http://localhost:5175/customer |
+
+开发服务器分别将 `/api` 代理到 `8081`、`8082`。正式环境分别构建部署，可配置构建时变量 `VITE_API_BASE_URL`，或使用同源反向代理；HTTPS、域名与小程序配置由部署环境提供。
+
+## 测试与构建
 
 ```powershell
+mvn -f backend/pom.xml test
+npm --prefix admin-platform run test -- --run
+npm --prefix admin-tenant run test -- --run
 npm --prefix admin-platform run build
 npm --prefix admin-tenant run build
 ```
 
-产物分别位于 `admin-platform/dist/` 与 `admin-tenant/dist/`。部署时平台前端配置 `VITE_API_BASE_URL` 为平台 API 的正式地址；企业前端配置为该客户自己的租户 API 地址。该变量在构建时写入资源，正式地址由部署环境提供，不提交客户域名到仓库。开发代理默认值可通过各自 `.env.local` 中的 `VITE_API_BASE_URL` 覆盖。
+测试覆盖组织权限、数据隔离、授权签名、订单履约、模块接入及页面交互等。测试通过不等同于真实支付、短信或设备服务已接通；以对应模块文档和实际部署验收结果为准。
 
-**部署职责边界：**平台管理端、平台 API 和平台控制数据库运行在我们管理的平台基础设施；企业总部/门店管理端、租户 API 和企业业务数据库由客户部署和维护在其侧。品牌网站及小程序源码属于企业系统项目，公开入口按既定方案使用平台统一域名/AppID；客户的 API 和业务数据仍留在客户租户系统。
+## 开发文档
 
-版本更新属于后续计划：平台将发布版本及签名更新包，客户侧更新代理将校验签名与适用版本，并在企业总部管理员确认后于客户侧本地升级。本阶段尚未交付该更新代理与升级流程；架构不允许平台远程执行客户服务器命令或静默修改客户服务器。
+- [部署说明](docs/部署说明.md)
+- [客户管理与数据范围](docs/platform/客户管理与数据范围.md)
+- [会员模块使用说明](docs/platform/会员模块使用说明.md)
+- [模块包规范](docs/platform/模块包规范-v1.md)
+- [模块运行时接入](docs/platform/模块执行器与运行时接入.md)
+- [开发交接记录](docs/AI开发交接-2026-11-02.md)
 
-更多配置、反向代理和生产边界见 [部署说明](docs/部署说明.md)。
+本项目正由一期养老业务逐步演进为模块化双系统。旧版页面、示例和历史文档用于追溯，不应直接作为当前生产部署方案。
 
-## 旧版单体管理端快速启动（兼容流程）
+## 许可证
 
-以下 `admin/` + 单一租户服务的流程用于旧版一期演示/回归，不代表新双系统管理端的部署方式。新开发管理端请使用上面的 `admin-platform/` 和 `admin-tenant/`。
-
-## 旧版单体项目快速启动
-
-### 1. 数据库
-
-```powershell
-mysql -u root -p -e "CREATE DATABASE elderly_care DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_general_ci;"
-mysql -u root -p elderly_care -e "source E:/yanglao/backend/apps/tenant-app/src/main/resources/db/schema.sql"
-mysql -u root -p elderly_care -e "source E:/yanglao/backend/apps/tenant-app/src/main/resources/db/data-demo.sql"
-```
-
-表结构与演示数据也可由 `dev` profile 启动时自动初始化（`spring.sql.init`）。
-
-### 2. 后端
-
-```powershell
-# 按本机情况修改 backend/apps/tenant-app/src/main/resources/application.yml 中的数据库账号密码
-mvn -f E:\yanglao\backend\pom.xml -pl apps/tenant-app -am package -DskipTests
-java -jar E:\yanglao\backend\apps\tenant-app\target\tenant-app-2.0.0-SNAPSHOT.jar --spring.profiles.active=dev
-```
-
-- 租户服务地址：http://localhost:8082
-- 接口文档：http://localhost:8082/swagger-ui.html
-- 平台控制面：http://localhost:8081/api/platform/v1/health
-- `dev` profile 会自动建表并写入演示数据；生产环境请去掉该 profile 并设置 `APP_JWT_SECRET`。
-
-平台控制面使用独立配置：设置 `PLATFORM_DB_URL`、`PLATFORM_DB_USERNAME`、`PLATFORM_DB_PASSWORD`、`PLATFORM_JWT_SECRET` 和 `PLATFORM_LICENSE_SIGNING_PRIVATE_KEY` 后启动 `platform-app`。接口清单、错误码和 Flyway 迁移说明见 `docs/platform/`；本地平台链路可用 `scripts/smoke-platform.ps1` 验证。
-
-### 3. 旧版管理端（`admin/`，兼容演示）
-
-```powershell
-Set-Location E:\yanglao\admin
-npm install
-npm run dev
-```
-
-打开 http://localhost:5173 ，已配置 `/api` 代理到 8082。
-
-### 4. 小程序
-
-1. 用微信开发者工具导入 `miniprogram/` 目录，AppID 选择“测试号”。
-2. 详情 → 本地设置 → 勾选“不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书”。
-3. 如需真机调试，把 `app.js` 中 `baseUrl` 改为本机局域网 IP。
-## 演示账号
-
-密码均为 `888888`。
-
-| 角色 | 手机号 | 登录端 |
-| --- | --- | --- |
-| 老人（张桂兰，elderId=1） | 13800000001 | 小程序 |
-| 家属（张小明，已绑定 elderId=1） | 13800000002 | 小程序 |
-| 老人（李长顺，elderId=2） | 13800000003 | 小程序 |
-| 机构管理员（康颐护理中心） | 13900000001 | 管理端 |
-| 机构管理员（夕阳红助餐） | 13900000002 | 管理端 |
-| 护理员（康颐护理中心） | 13900000011 | 管理端 |
-| 平台运营管理员 | 13700000001 | 管理端 |
-| 待审核服务商（安康陪诊） | 13900000003 | 管理端（审核通过后开通） |
-
-## 验证
-
-推荐使用统一入口执行后端结构检查、全仓 Maven 测试和管理端构建：
-
-```powershell
-Set-Location E:\yanglao
-.\scripts\verify-all.ps1
-```
-
-只验证后端：
-
-```powershell
-.\scripts\verify-backend.ps1
-```
-
-后端集成测试继续覆盖一期完整闭环：登录鉴权 → 体征上报与阈值告警 → SOS 分级推送 → 家属状态面板 → 告警处置闭环 → 家属代下单 → 支付自动派单 → 机构接单/上门打卡 → 评价与结算 → 服务商审核开通账号 → 项目审核后上架 → 越权与状态机非法流转拦截。
-
-阶段 0 实测：后端 33 项测试通过（其中原租户集成测试 22 项），架构边界 3 项通过；管理端 TypeScript + Vite 构建通过，JS 产物 188.01 KB（gzip 59.64 KB）。详见 `docs/阶段0验收记录.md`。
-
-接口冒烟（需后端已启动）：
-
-```bash
-bash scripts/smoke-test.sh http://localhost:8082
-```
-
-依次验证：登录 → 服务商城 → 体征异常 → SOS → 家属面板 → 告警处置闭环 → 代下单/支付/派单 → 接单打卡 → 评价 → 越权拦截 → 数据大屏。
-## 目录结构
-
-```text
-backend/
-  pom.xml                          Maven 聚合父工程
-  apps/
-    platform-app/                  平台控制面应用，端口 8081
-    tenant-app/                    企业租户业务应用，端口 8082
-  libs/
-    care-common/                   统一响应、错误码、TraceId
-    care-security/                 安全基础设施
-    care-core-api/                 核心公开契约
-    care-business-api/             业务公开契约
-    care-module-api/               模块描述与依赖契约
-  core/
-    care-core/                     核心共享实现
-    care-business/                 业务共享实现
-  modules/
-    institution/                   机构康养模块 API + 实现
-    community/                     社区居家模块 API + 实现
-    membership/                    会员运营模块 API + 实现
-  platform/
-    platform-core/                 平台控制面核心
-    platform-licensing/            授权领域
-  tests/
-    architecture-tests/            架构边界测试
-admin/                             React 管理端
-miniprogram/                       微信小程序
-docs/                              设计、计划、接口、需求追溯、部署与验收
-scripts/                           结构检查、统一验证与冒烟脚本
-```
-
+GitHub 仓库现有许可证为 [BSD 3-Clause](LICENSE)。

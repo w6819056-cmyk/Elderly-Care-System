@@ -12,7 +12,7 @@ interface TenantAuthValue {
   status: TenantAuthStatus
   principal: TenantStaffPrincipal | null
   error: string | null
-  login(account: string, password: string): Promise<TenantStaffPrincipal>
+  loginHq(account: string, password: string): Promise<TenantStaffPrincipal>
   logout(): void
   retry(): void
 }
@@ -68,8 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { active = false }
   }, [attempt])
 
-  const login = useCallback(async (account: string, password: string) => {
-    const result = await tenantApi.login(account, password)
+  const loginHq = useCallback(async (account: string, password: string) => {
+    const result = await tenantApi.hqLogin(account, password)
     saveTenantSession(result.accessToken, result.expiresAt, result.principal)
     setPrincipal(result.principal)
     setError(null)
@@ -85,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const retry = useCallback(() => setAttempt(value => value + 1), [])
-  const value = useMemo(() => ({ status, principal, error, login, logout, retry }),
-    [status, principal, error, login, logout, retry])
+  const value = useMemo(() => ({ status, principal, error, loginHq, logout, retry }),
+    [status, principal, error, loginHq, logout, retry])
 
   return <TenantAuthContext.Provider value={value}>{children}</TenantAuthContext.Provider>
 }

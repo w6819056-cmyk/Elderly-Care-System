@@ -47,3 +47,18 @@ brand-site/dist/
 *.pem
 *.p12
 *.jks
+
+# Enterprise runtime avatars and build diagnostics
+data/
+backend/data/
+backend/employee-profile-build.log
+
+backend/iam-management-build.log
+
+backend/portal-build.log
+
+backend/site-build.log
+examples/**/target/
+examples/**/payload/backend/*.jar
+*.caremod
+backend/modules/**/payload/backend/*.jar

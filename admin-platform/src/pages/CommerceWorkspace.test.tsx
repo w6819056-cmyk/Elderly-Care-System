@@ -1,0 +1,13 @@
+import '@testing-library/jest-dom/vitest'
+import {afterEach,beforeEach,expect,it,vi} from 'vitest'
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import SalesWorkspacePage from './SalesWorkspacePage'
+import ModuleStorefrontPage from './ModuleStorefrontPage'
+const mocks=vi.hoisted(()=>({request:vi.fn()}))
+vi.mock('../api/client',()=>({request:mocks.request}))
+vi.mock('../auth/AuthProvider',()=>({usePlatformAuth:()=>({principal:{permissionCodes:['platform.module.view','platform.module.manage','platform.order.view','platform.order.manage','platform.plan.view','platform.plan.manage','platform.enterprise.view']}})}))
+afterEach(cleanup)
+beforeEach(()=>{vi.clearAllMocks();mocks.request.mockImplementation((path:string)=>Promise.resolve(path.includes('/modules?')?{items:[{moduleCode:'membership',name:'会员模块'}]}:path.endsWith('/products')?[{id:1,moduleCode:'membership',moduleName:'会员模块',name:'会员年卡',description:'会员年卡介绍',billing_mode:'PERIOD',duration_days:365,amount:199,store_quota:3,sale_status:'ON_SALE'}]:path.endsWith('/cards')?[{id:1,productId:1,planId:null,name:'会员年卡',description:'会员年卡介绍',amount:199,saleStatus:'ON_SALE',imageUrl:'/images/membership-cover.svg',sortOrder:1,enabled:true}]:[]))})
+it('quotes without selecting an enterprise',async()=>{render(<SalesWorkspacePage/>);expect(await screen.findByRole('option',{name:/会员年卡/})).toBeInTheDocument();expect(screen.queryByLabelText('企业')).not.toBeInTheDocument();fireEvent.change(screen.getByLabelText('选择商品'),{target:{value:'product:1'}});fireEvent.click(screen.getByRole('button',{name:'计算报价'}));await waitFor(()=>expect(mocks.request).toHaveBeenCalledWith('/api/platform/v1/commerce/quote',{method:'POST',body:JSON.stringify({productId:1,planCode:null,couponCode:''})}))})
+it('edits product metadata in pricing workspace',async()=>{render(<SalesWorkspacePage/>);fireEvent.click(screen.getByRole('button',{name:'模块定价'}));fireEvent.click(await screen.findByRole('button',{name:'修改商品'}));expect(screen.getByLabelText('显示名称')).toHaveValue('会员年卡');expect(screen.getByLabelText('价格（元）')).toHaveValue(199)})
+it('storefront edits media only and separates product and plan cards',async()=>{render(<ModuleStorefrontPage/>);expect(await screen.findByRole('button',{name:'选择会员年卡'})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'模块编辑'}));fireEvent.click(await screen.findByRole('button',{name:'编辑卡片'}));expect(screen.getByLabelText('封面图片地址')).toBeInTheDocument();expect(screen.queryByLabelText('价格（元）')).not.toBeInTheDocument();expect(screen.queryByText('单模块定价')).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'套餐编辑'}));expect(screen.queryByRole('button',{name:'选择会员年卡'})).not.toBeInTheDocument()})

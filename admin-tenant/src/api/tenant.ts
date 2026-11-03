@@ -20,6 +20,8 @@ export interface TenantModule {
   storeQuota: number
   assignedStores: number
   enabled: boolean
+  installed: boolean
+  installedVersion: string | null
 }
 
 export interface TenantStoreOption {
@@ -56,7 +58,7 @@ export interface TenantModuleMenu {
 }
 
 export const tenantApi = {
-  login: (account: string, password: string) => request<TenantLoginResult>('/api/tenant/v1/auth/login', {
+  hqLogin: (account: string, password: string) => request<TenantLoginResult>('/api/tenant/v1/auth/login', {
     method: 'POST', body: JSON.stringify({ account, password })
   }),
   me: () => request<TenantStaffPrincipal>('/api/tenant/v1/auth/me'),

@@ -1,0 +1,10 @@
+import { request } from './client'
+import type { TenantLoginResult } from './tenant'
+export interface PublicStore {storeNo:string;name:string;enterpriseName:string}
+export interface Application {publicId:string;storeName:string;storeNo:string;username:string;displayName:string;phone:string;email:string|null;status:string;reviewNote:string|null;createdAt:string}
+const base=import.meta.env.VITE_API_BASE_URL?.replace(/\/$/,'')??''
+export async function publicRequest<T>(path:string,body?:unknown):Promise<T>{const r=await fetch(base+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});const j=await r.json();if(!r.ok||j.code!=='OK')throw new Error(j.message||'请求失败，请稍后重试');return j.data}
+export const portalApi={store:(no:string)=>publicRequest<PublicStore>(`/api/public/store-portals/${encodeURIComponent(no)}`),login:(no:string,account:string,password:string)=>publicRequest<TenantLoginResult>(`/api/public/store-portals/${encodeURIComponent(no)}/login`,{account,password}),apply:(no:string,body:unknown)=>publicRequest<{applicationNo:string;message:string}>(`/api/public/store-portals/${encodeURIComponent(no)}/applications`,body),applications:()=>request<Application[]>('/api/tenant/v1/hq/staff-applications'),review:(id:string,decision:string,roleCodes:string[],note:string)=>request(`/api/tenant/v1/hq/staff-applications/${encodeURIComponent(id)}/review`,{method:'POST',body:JSON.stringify({decision,roleCodes,note})})}
+
+export interface VisitBooking {publicId:string;storeName:string;visitorName:string;phone:string;visitType:string;preferredDate:string;remark:string|null;status:string}
+export const visitApi={create:(no:string,body:unknown)=>publicRequest<{bookingNo:string}>(`/api/public/store-portals/${encodeURIComponent(no)}/visit-bookings`,body),list:()=>request<VisitBooking[]>('/api/tenant/v1/visit-bookings'),status:(id:string,status:string)=>request(`/api/tenant/v1/visit-bookings/${encodeURIComponent(id)}/status`,{method:'PATCH',body:JSON.stringify({status})})}

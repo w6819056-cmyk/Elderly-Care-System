@@ -1,9 +1,14 @@
+import EnterpriseRegisterPage from './pages/EnterpriseRegisterPage'
+import SalesWorkspacePage from './pages/SalesWorkspacePage'
+import ModuleStorefrontPage from './pages/ModuleStorefrontPage'
+import ModuleCenterPage from './pages/ModuleCenterPage'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, usePlatformAuth } from './auth/AuthProvider'
 import PlatformLayout from './components/PlatformLayout'
 import ForbiddenPage from './pages/ForbiddenPage'
 import PlatformHomePage from './pages/PlatformHomePage'
 import PlatformLoginPage from './pages/PlatformLoginPage'
+import PlatformEnterprisesPage from './pages/PlatformEnterprisesPage'
 
 function RequirePlatformAuth({ children }: { children: JSX.Element }) {
   const auth = usePlatformAuth()
@@ -26,10 +31,16 @@ function NotFoundPage() {
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/register-enterprise" element={<EnterpriseRegisterPage />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/forbidden" element={<ForbiddenPage />} />
       <Route path="/" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
         <Route index element={<PlatformHomePage />} />
+        <Route path="enterprises" element={<PlatformEnterprisesPage />} />
+        <Route path="modules" element={<ModuleCenterPage />} />
+        <Route path="module-shop" element={<ModuleStorefrontPage />} />
+        <Route path="plans" element={<Navigate to="/sales" replace />} />
+        <Route path="sales" element={<SalesWorkspacePage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

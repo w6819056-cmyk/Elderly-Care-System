@@ -1,0 +1,15 @@
+import '@testing-library/jest-dom/vitest'
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import PlatformEnterprisesPage from './PlatformEnterprisesPage'
+const mocks=vi.hoisted(()=>({request:vi.fn(),permissions:[] as string[],applications:[] as unknown[]}))
+vi.mock('../api/client',()=>({request:mocks.request}))
+vi.mock('../auth/AuthProvider',()=>({usePlatformAuth:()=>({principal:{permissionCodes:mocks.permissions}})}))
+afterEach(cleanup)
+beforeEach(()=>{vi.clearAllMocks();mocks.permissions=[];mocks.applications=[];mocks.request.mockImplementation((path:string)=>Promise.resolve(path==='/api/platform/v1/enterprise-applications'?mocks.applications:path.includes('/instances')?[{publicId:'ins_demo',installationId:'install-1',tenantDatabaseId:'tenant-1',status:'ACTIVE',licenseVersion:2,lastHeartbeatAt:null}]:{items:[{publicId:'ent_demo',orgNo:'ORG-DEMO',name:'康颐集团',contactName:'王凯文',contactPhone:'13800000000',status:'ACTIVE',createdAt:'2026-11-01T10:00:00Z'}],total:1,page:1,pageSize:20}))})
+describe('enterprise registration and review',()=>{
+ it('blocks users without enterprise view permission',()=>{render(<PlatformEnterprisesPage/>);expect(screen.getByText('无权查看企业管理')).toBeInTheDocument();expect(mocks.request).not.toHaveBeenCalled()})
+ it('keeps enterprise management without manual creation',async()=>{mocks.permissions=['platform.enterprise.view','platform.enterprise.manage','platform.license.manage'];render(<PlatformEnterprisesPage/>);expect(await screen.findByText('康颐集团')).toBeInTheDocument();expect(screen.queryByRole('button',{name:'新建企业'})).not.toBeInTheDocument();expect(screen.getByRole('button',{name:'生成激活码'})).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'查看实例'}));expect(await screen.findByText('install-1')).toBeInTheDocument()})
+ it('opens existing enterprise profile',async()=>{mocks.permissions=['platform.enterprise.view','platform.enterprise.manage'];render(<PlatformEnterprisesPage/>);fireEvent.click(await screen.findByRole('button',{name:'编辑资料'}));expect(screen.getByRole('dialog',{name:'编辑企业资料'})).toBeInTheDocument();expect(screen.getByLabelText('企业名称')).toHaveValue('康颐集团')})
+ it('requires a review reason and submits the selected application',async()=>{mocks.permissions=['platform.enterprise.view','platform.enterprise.manage'];mocks.applications=[{publicId:'app_demo',orgNo:'NEW-ORG',name:'安馨养老',contactName:'李经理',contactPhone:'13900000000',status:'PENDING'}];render(<PlatformEnterprisesPage/>);fireEvent.click(await screen.findByRole('button',{name:'通过'}));expect(screen.getByRole('button',{name:'确认审核'})).toBeDisabled();fireEvent.change(screen.getByRole('textbox',{name:/审核说明/}),{target:{value:'企业资料核验通过'}});fireEvent.click(screen.getByRole('button',{name:'确认审核'}));await waitFor(()=>expect(mocks.request).toHaveBeenCalledWith('/api/platform/v1/enterprise-applications/app_demo/review',{method:'POST',body:JSON.stringify({approved:true,reason:'企业资料核验通过'})}))})
+})

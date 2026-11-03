@@ -128,6 +128,26 @@ public class PlanService {
         }
     }
 
+    public PlanView update(String code,CreatePlanCommand command,PlatformPrincipal actor,String traceId) {
+        ValidatedPlan plan=validate(command);
+        if(!plan.code().equals(code))throw planInvalid("套餐编码不可修改");
+        return transactionTemplate.execute(tx -> {
+            long id=jdbcClient.sql("SELECT id FROM pf_plan WHERE code=:code FOR UPDATE").param("code",code).query(Long.class).optional()
+                    .orElseThrow(()->new PlatformApiException(ErrorCode.PLAN_NOT_FOUND,"套餐不存在"));
+            jdbcClient.sql("UPDATE pf_plan SET name=:name,description=:description,amount=:amount,minimum_amount=:minimum,updated_at=:now,version=version+1 WHERE id=:id")
+                    .param("name",plan.name()).param("description",plan.description()).param("amount",plan.amount()).param("minimum",plan.minimumAmount()).param("now",Timestamp.from(clock.now())).param("id",id).update();
+            jdbcClient.sql("DELETE FROM pf_plan_module WHERE plan_id=:id").param("id",id).update();
+            int sort=1;
+            for(ValidatedPlanItem item:plan.items()) {
+                jdbcClient.sql("INSERT INTO pf_plan_module(plan_id,module_id,billing_mode,duration_days,store_quota,sort_order) VALUES(:plan,:module,:mode,:days,:quota,:sort)")
+                        .param("plan",id).param("module",item.moduleId()).param("mode",item.billingMode()).param("days",item.durationDays()).param("quota",item.storeQuota()).param("sort",sort++).update();
+            }
+            PlanView updated=findByPlanId(id);
+            auditService.record(actor.userId(),actor.publicId(),"PLATFORM_PLAN_UPDATED","PLAN",code,null,traceId);
+            return updated;
+        });
+    }
+
     public List<PlanView> list(String enterpriseId) {
         String normalizedEnterpriseId = requireText(enterpriseId, "enterpriseId", 64);
         long enterprisePk = jdbcClient.sql(
@@ -149,6 +169,40 @@ public class PlanService {
                 .map(this::findByPlanId)
                 .filter(plan -> !allModulesPermanentlyOwned(enterprisePk, plan.items()))
                 .toList();
+    }
+
+    public List<PlanView> listCatalog() {
+        return jdbcClient.sql("SELECT id FROM pf_plan ORDER BY created_at DESC, id DESC")
+                .query(Long.class)
+                .list()
+                .stream()
+                .map(this::findByPlanId)
+                .toList();
+    }
+
+    public PlanView changeStatus(String code, String statusValue, PlatformPrincipal actor, String traceId) {
+        String target = statusValue == null ? "" : statusValue.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("ON_SALE", "OFF_SALE").contains(target)) {
+            throw planInvalid("套餐状态必须为 ON_SALE 或 OFF_SALE");
+        }
+        String publicId = jdbcClient.sql("SELECT public_id FROM pf_plan WHERE code = :code")
+                .param("code", requireText(code, "code", 40))
+                .query(String.class)
+                .optional()
+                .orElseThrow(() -> new PlatformApiException(ErrorCode.NOT_FOUND, "套餐不存在"));
+        int updated = jdbcClient.sql("""
+                        UPDATE pf_plan
+                        SET sale_status = :status, updated_at = :updatedAt, version = version + 1
+                        WHERE public_id = :publicId
+                        """)
+                .param("status", target)
+                .param("updatedAt", Timestamp.from(clock.now()))
+                .param("publicId", publicId)
+                .update();
+        if (updated != 1) throw new PlatformApiException(ErrorCode.CONFLICT, "套餐状态更新冲突");
+        auditService.record(actor.userId(), actor.publicId(), "PLATFORM_PLAN_STATUS_CHANGED",
+                "PLAN", publicId, "{\"status\":\"" + target + "\"}", traceId);
+        return findByPublicId(publicId);
     }
 
     private PlanView findByPublicId(String publicId) {
@@ -175,7 +229,7 @@ public class PlanService {
                                p.amount AS standard_amount
                         FROM pf_plan_module pm
                         JOIN pf_module_definition m ON m.id = pm.module_id
-                        JOIN pf_module_price p
+                        LEFT JOIN pf_module_price p
                           ON p.module_id = pm.module_id
                          AND p.billing_mode = pm.billing_mode
                          AND p.duration_days = pm.duration_days
@@ -190,7 +244,7 @@ public class PlanService {
                         rs.getString("billing_mode"),
                         rs.getInt("duration_days"),
                         rs.getInt("store_quota"),
-                        money(rs.getBigDecimal("standard_amount"))
+                        nullableMoney(rs.getBigDecimal("standard_amount"))
                 ))
                 .list();
         return new PlanView(
@@ -369,6 +423,10 @@ public class PlanService {
 
     private static BigDecimal money(BigDecimal amount) {
         return amount.setScale(2, RoundingMode.UNNECESSARY);
+    }
+
+    private static BigDecimal nullableMoney(BigDecimal amount) {
+        return amount == null ? null : money(amount);
     }
 
     private static String requireText(String value, String field, int maxLength) {

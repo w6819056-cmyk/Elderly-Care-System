@@ -35,10 +35,12 @@ public class HqIamController {
     private final TenantIamService service;
     private final TenantDataScopeService dataScopeService;
     private final PasswordEncoder passwordEncoder;
+    private final StaffProfileService profiles;
     private final Clock clock = Clock.systemUTC();
 
     public HqIamController(TenantIamService service, TenantDataScopeService dataScopeService,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder, StaffProfileService profiles) {
+        this.profiles = profiles;
         this.service = service;
         this.dataScopeService = dataScopeService;
         this.passwordEncoder = passwordEncoder;
@@ -54,6 +56,15 @@ public class HqIamController {
     public ApiResponse<List<PermissionGroupView>> permissionGroups(
             Authentication auth, HttpServletRequest request) {
         return ok(service.listPermissionGroups(context(auth)), request);
+    }
+
+    @GetMapping("/permission-groups/{publicId}")
+    public ApiResponse<TenantIamService.GroupDetails> groupDetails(@PathVariable String publicId, Authentication auth, HttpServletRequest request) {
+        return ok(service.permissionGroupDetails(publicId,context(auth)),request);
+    }
+    @GetMapping("/roles/{publicId}")
+    public ApiResponse<TenantIamService.RoleDetails> roleDetails(@PathVariable String publicId, Authentication auth, HttpServletRequest request) {
+        return ok(service.roleDetails(publicId,context(auth)),request);
     }
 
     @PostMapping("/permission-groups")
@@ -93,17 +104,34 @@ public class HqIamController {
     }
 
     @GetMapping("/staff")
-    public ApiResponse<List<StaffView>> staff(Authentication auth, HttpServletRequest request) {
-        return ok(service.listStaff(context(auth)), request);
+    public ApiResponse<List<StaffProfileService.ProfileStaff>> staff(Authentication auth, HttpServletRequest request) {
+        return ok(service.listStaff(context(auth)).stream().map(profiles::view).toList(), request);
     }
 
+    @org.springframework.transaction.annotation.Transactional
     @PostMapping("/staff")
-    public ApiResponse<StaffView> createStaff(
+    public ApiResponse<StaffProfileService.ProfileStaff> createStaff(
             @Valid @RequestBody CreateStaffRequest body, Authentication auth, HttpServletRequest request) {
+        byte[] avatar = profiles.validateAvatar(body.avatarDataUrl());
         var command = new TenantIamService.CreateStaffCommand(body.username(), passwordEncoder.encode(body.password()),
                 body.displayName(), body.phone(), body.staffType(), body.homeStorePublicId(), body.roleCodes());
-        return ok(service.createStaff(command, context(auth), traceId(request)), request);
+        var created = service.createStaff(command, context(auth), traceId(request));
+        profiles.save(created.publicId(), body.email(), avatar);
+        return ok(profiles.view(created), request);
     }
+
+    @GetMapping("/staff/{publicId}/avatar")
+    public org.springframework.http.ResponseEntity<byte[]> staffAvatar(@PathVariable String publicId, Authentication auth) {
+        boolean visible = service.listStaff(context(auth)).stream().anyMatch(s -> s.publicId().equals(publicId));
+        if (!visible) return org.springframework.http.ResponseEntity.notFound().build();
+        byte[] image = profiles.avatar(publicId);
+        if (image == null) return org.springframework.http.ResponseEntity.notFound().build();
+        return org.springframework.http.ResponseEntity.ok().contentType(org.springframework.http.MediaType.IMAGE_PNG)
+                .header("Cache-Control", "private, no-store").header("X-Content-Type-Options", "nosniff").body(image);
+    }
+
+    @GetMapping("/staff/{publicId}/access")
+    public ApiResponse<TenantIamService.StaffAccessDetails> staffAccess(@PathVariable String publicId,Authentication auth,HttpServletRequest request){return ok(service.staffAccessDetails(publicId,context(auth)),request);}
 
     @PatchMapping("/staff/{publicId}/roles")
     public ApiResponse<Void> replaceStaffRoles(@PathVariable String publicId,
@@ -170,7 +198,7 @@ public class HqIamController {
     }
     public record CreateStaffRequest(@NotBlank String username, @NotBlank @Size(min = 12) String password,
             @NotBlank String displayName, String phone, @NotBlank String staffType,
-            String homeStorePublicId, Set<String> roleCodes) {}
+            String homeStorePublicId, Set<String> roleCodes, @jakarta.validation.constraints.Email @Size(max=254) String email, @Size(max=2800000) String avatarDataUrl) {}
     public record ReplaceStaffRolesRequest(Set<String> roleCodes) {
         public ReplaceStaffRolesRequest { roleCodes = Set.copyOf(roleCodes == null ? Set.of() : roleCodes); }
     }

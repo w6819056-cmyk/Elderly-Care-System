@@ -23,7 +23,7 @@ class PlatformMigrationTest {
                     .query(String.class)
                     .list();
 
-            assertThat(tableCount).isEqualTo(26L);
+            assertThat(tableCount).isEqualTo(31L);
             assertThat(database.jdbcClient().sql("""
                             SELECT COUNT(*) FROM information_schema.tables
                             WHERE table_schema = 'public' AND table_name = 'pf_instance_nonce'

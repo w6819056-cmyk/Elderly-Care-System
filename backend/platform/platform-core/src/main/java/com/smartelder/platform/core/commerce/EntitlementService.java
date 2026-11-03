@@ -45,6 +45,10 @@ public class EntitlementService {
         transactionTemplate.executeWithoutResult(status -> applyPaidOrderInTransaction(orderId));
     }
 
+    public void issueLicenseForInstance(long instanceId,String traceId) {
+        licenseIssueService.issueForInstance(instanceId,traceId);
+    }
+
     public void retryFulfillment(long orderId, String traceId) {
         RetryAttempt attempt = Objects.requireNonNull(transactionTemplate.execute(status ->
                 beginRetry(orderId)
@@ -241,7 +245,12 @@ public class EntitlementService {
     private boolean applyItem(long enterpriseId, long orderId, OrderItem item, Instant now) {
         ExistingEntitlement existing = findEntitlementForUpdate(enterpriseId, item.moduleId()).orElse(null);
         String billingMode = item.billingMode().toUpperCase(Locale.ROOT);
-        if (existing != null && existing.perpetual()) {
+        boolean activeFormal = existing != null
+                && "ACTIVE".equals(existing.status())
+                && "FORMAL".equals(existing.licenseType())
+                && existing.startsAt() != null && !existing.startsAt().isAfter(now)
+                && (existing.perpetual() || (existing.expiresAt() != null && existing.expiresAt().isAfter(now)));
+        if (activeFormal && existing.perpetual()) {
             updateItemResult(item.id(), "SKIPPED_EXISTING");
             return false;
         }
@@ -281,7 +290,8 @@ public class EntitlementService {
             expiresAt = null;
             result = "UPGRADED_PERPETUAL";
         } else {
-            boolean activePeriod = existing.expiresAt() != null && existing.expiresAt().isAfter(now);
+            // Retained dates on suspended/revoked grants are for restoration, not renewal credit.
+            boolean activePeriod = activeFormal && existing.expiresAt() != null;
             Instant renewalBase = activePeriod ? existing.expiresAt() : now;
             if (!activePeriod) {
                 startsAt = now;

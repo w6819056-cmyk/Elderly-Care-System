@@ -1,0 +1,2 @@
+ALTER TABLE iam_staff ADD COLUMN email VARCHAR(254) NULL;
+ALTER TABLE iam_staff ADD COLUMN avatar_key VARCHAR(80) NULL;

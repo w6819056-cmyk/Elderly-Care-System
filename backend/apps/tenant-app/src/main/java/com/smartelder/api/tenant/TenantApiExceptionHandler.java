@@ -17,10 +17,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(basePackages = "com.smartelder.api.tenant")
+@org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
+@RestControllerAdvice(basePackages = {"com.smartelder.api.tenant", "com.smartelder.modules"})
 public class TenantApiExceptionHandler {
 
     private final Clock clock = Clock.systemUTC();
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> explicitStatus(org.springframework.web.server.ResponseStatusException ex,HttpServletRequest request){
+        int status=ex.getStatusCode().value();String code=switch(status){case 401->"UNAUTHORIZED";case 403->"PERMISSION_DENIED";case 404->"NOT_FOUND";case 409->"BUSINESS_RULE_VIOLATION";default->"INVALID_REQUEST";};
+        return response(status,code,ex.getReason()==null?"模块请求被拒绝":ex.getReason(),request);
+    }
 
     @ExceptionHandler(TenantStaffAuthException.class)
     public ResponseEntity<ApiResponse<Void>> auth(TenantStaffAuthException ex, HttpServletRequest request) {
@@ -52,6 +58,10 @@ public class TenantApiExceptionHandler {
     @ExceptionHandler(DuplicateKeyException.class)
     public ResponseEntity<ApiResponse<Void>> duplicate(DuplicateKeyException ex, HttpServletRequest request) {
         return response(409, "BUSINESS_RULE_VIOLATION", "unique value already exists", request);
+    }
+    @ExceptionHandler(org.springframework.dao.ConcurrencyFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> concurrent(org.springframework.dao.ConcurrencyFailureException ex,HttpServletRequest request){
+        return response(409,"BUSINESS_RULE_VIOLATION","数据正在被其他操作修改，请刷新后重试",request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

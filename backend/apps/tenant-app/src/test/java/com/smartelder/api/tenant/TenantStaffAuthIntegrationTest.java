@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartelder.api.tenant.auth.TenantStaffAuthService;
 import com.smartelder.api.tenant.auth.TenantBootstrapService;
+import com.smartelder.core.iam.TenantIamService;
 import com.smartelder.security.JwtService;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -38,6 +39,7 @@ class TenantStaffAuthIntegrationTest {
     @Autowired private JwtService legacyJwtService;
     @Autowired private TenantStaffAuthService authService;
     @Autowired private TenantBootstrapService bootstrapService;
+    @Autowired private TenantIamService iamService;
     @Autowired private ObjectMapper objectMapper;
 
     @Test
@@ -56,6 +58,17 @@ class TenantStaffAuthIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.staffPublicId").value(staff.publicId()))
                 .andExpect(jsonPath("$.data.staffType").value("HQ"));
+    }
+
+    @Test
+    void headquartersLoginRejectsStoreStaffAccounts() throws Exception {
+        Staff storeStaff = createStoreStaff();
+
+        mvc.perform(post("/api/tenant/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account\":\"" + storeStaff.username() + "\",\"password\":\"secret-pass\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
@@ -141,8 +154,12 @@ class TenantStaffAuthIntegrationTest {
                 .isEqualTo(TenantBootstrapService.BootstrapResult.ALREADY_INITIALIZED);
         org.assertj.core.api.Assertions.assertThat(jdbc.sql("SELECT COUNT(*) FROM core_enterprise WHERE org_no = :orgNo")
                 .param("orgNo", orgNo).query(Integer.class).single()).isEqualTo(1);
-        assertThat(authService.login(command.ownerAccount(), command.ownerPassword()).principal().staffType())
-                .isEqualTo("HQ");
+        TenantStaffAuthService.LoginResult ownerLogin = authService.login(command.ownerAccount(), command.ownerPassword());
+        assertThat(ownerLogin.principal().staffType()).isEqualTo("HQ");
+        assertThat(ownerLogin.principal().accessContext().permissionCodes())
+                .contains("core.store.view", "iam.role.view", "core.module.view", "core.module.install");
+        assertThat(iamService.listStaff(ownerLogin.principal().accessContext()))
+                .extracting(TenantIamService.StaffView::username).contains(command.ownerAccount());
     }
 
     private Staff createStaff(String status) {
@@ -156,6 +173,24 @@ class TenantStaffAuthIntegrationTest {
                 .param("hash", passwordEncoder.encode("secret-pass")).param("status", status)
                 .param("now", now).update();
         return new Staff(publicId, username);
+    }
+
+    private Staff createStoreStaff() {
+        String storePublicId = UUID.randomUUID().toString();
+        String staffPublicId = UUID.randomUUID().toString();
+        String username = "store_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        Timestamp now = Timestamp.from(Instant.now());
+        jdbc.sql("INSERT INTO core_store (public_id, store_no, name, status, version, created_at, updated_at) "
+                        + "VALUES (:publicId, :storeNo, '测试门店', 'ACTIVE', 0, :now, :now)")
+                .param("publicId", storePublicId).param("storeNo", "S-" + UUID.randomUUID()).param("now", now).update();
+        Long storeId = jdbc.sql("SELECT id FROM core_store WHERE public_id = :publicId")
+                .param("publicId", storePublicId).query(Long.class).single();
+        jdbc.sql("INSERT INTO iam_staff (public_id, username, password_hash, display_name, staff_type, home_store_id, "
+                        + "status, version, created_at, updated_at) VALUES (:publicId, :username, :hash, '门店员工', "
+                        + "'STORE', :storeId, 'ACTIVE', 0, :now, :now)")
+                .param("publicId", staffPublicId).param("username", username)
+                .param("hash", passwordEncoder.encode("secret-pass")).param("storeId", storeId).param("now", now).update();
+        return new Staff(staffPublicId, username);
     }
 
     private void clearTenantBootstrapData() {
@@ -172,6 +207,8 @@ class TenantStaffAuthIntegrationTest {
         jdbc.sql("DELETE FROM iam_role").update();
         jdbc.sql("DELETE FROM iam_permission_group").update();
         jdbc.sql("DELETE FROM iam_store_group").update();
+        jdbc.sql("DELETE FROM core_visit_booking").update();
+        jdbc.sql("DELETE FROM iam_staff_application").update();
         jdbc.sql("DELETE FROM core_store").update();
         jdbc.sql("DELETE FROM core_enterprise").update();
     }

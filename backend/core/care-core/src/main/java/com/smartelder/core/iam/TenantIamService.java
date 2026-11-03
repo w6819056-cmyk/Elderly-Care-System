@@ -54,6 +54,31 @@ public class TenantIamService {
     }
 
     @Transactional(readOnly = true)
+    public StaffAccessDetails staffAccessDetails(String publicId,TenantAccessContext actor){
+        requirePermission(actor,"iam.staff.view");
+        StaffView staff=listStaff(actor).stream().filter(s->s.publicId().equals(publicId)).findFirst().orElseThrow(()->new IllegalStateException("staff not found or outside scope"));
+        return new StaffAccessDetails(repository.staffRoleCodes(staff.id()),repository.isProtectedOwnerStaff(publicId),"STORE".equals(staff.staffType())?"STORES":repository.staffScopeType(staff.id()),repository.staffStorePublicIds(staff.id()),repository.staffGroupPublicIds(staff.id()));
+    }
+    public record StaffAccessDetails(Set<String> roleCodes,boolean protectedOwner,String scopeType,Set<String> storePublicIds,Set<String> storeGroupPublicIds){}
+
+    @Transactional(readOnly = true)
+    public GroupDetails permissionGroupDetails(String publicId, TenantAccessContext actor) {
+        requirePermission(actor,"iam.permission-group.view");
+        PermissionGroupView group=repository.findPermissionGroup(publicId);
+        if(group==null)throw new IllegalStateException("permission group not found");
+        return new GroupDetails(group,repository.groupPermissionCodes(group.id()));
+    }
+    @Transactional(readOnly = true)
+    public RoleDetails roleDetails(String publicId, TenantAccessContext actor) {
+        requirePermission(actor,"iam.role.view");
+        RoleView role=repository.findRoleByPublicId(publicId);
+        if(role==null)throw new IllegalStateException("role not found");
+        return new RoleDetails(role,repository.roleGroupCodes(role.id()),repository.roleEffects(role.id()));
+    }
+    public record GroupDetails(PermissionGroupView group,Set<String> permissionCodes){}
+    public record RoleDetails(RoleView role,Set<String> permissionGroupCodes,Map<String,String> permissionEffects){}
+
+    @Transactional(readOnly = true)
     public java.util.List<PermissionDefinitionView> listPermissionDefinitions(
             TenantAccessContext actor) {
         requirePermission(actor, "iam.role.view");

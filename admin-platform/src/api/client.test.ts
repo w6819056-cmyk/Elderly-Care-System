@@ -32,4 +32,13 @@ describe('platform API client', () => {
     await expect(request('/api/platform/v1/enterprises')).rejects.toBeInstanceOf(ApiClientError)
     expect(localStorage.getItem('platform.access_token')).toBe('platform-token')
   })
+
+  it('reports an empty non-JSON API response as a service error', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 502, statusText: 'Bad Gateway' }))
+    await expect(request('/api/platform/v1/auth/me')).rejects.toMatchObject({
+      status: 502,
+      code: 'INVALID_RESPONSE',
+      message: '平台服务暂不可用，请检查后端服务后重试'
+    })
+  })
 })

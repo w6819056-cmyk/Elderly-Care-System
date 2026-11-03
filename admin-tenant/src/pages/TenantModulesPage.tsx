@@ -48,7 +48,7 @@ export default function TenantModulesPage() {
   }
 
   return (
-    <section className="tenant-modules-page">
+    <section className={`tenant-modules-page${modules.length === 0 && !error ? ' has-no-modules' : ''}`}>
       <header className="tenant-page-heading"><div><p className="tenant-eyebrow">ENTERPRISE SETTINGS</p><h1>模块授权</h1></div>
         <button className="secondary-action" onClick={() => void refresh()} disabled={busy}>刷新</button></header>
       {license && <dl className="license-strip">
@@ -57,7 +57,7 @@ export default function TenantModulesPage() {
         <div><dt>最近同步</dt><dd>{license.lastSuccessfulSyncAt ? new Date(license.lastSuccessfulSyncAt).toLocaleString() : '尚未同步'}</dd></div>
       </dl>}
       {error && <p className="tenant-error" role="alert">{error}</p>}
-      {modules.length === 0 && !error ? <p className="empty-state">当前没有可用模块授权</p> : <div className="module-list">
+      {modules.length === 0 && !error ? <p className="module-empty-message">当前没有可用模块授权</p> : <div className="module-list">
         {modules.map(module => {
           const items = assignments[module.moduleCode] ?? []
           const active = items.filter(item => item.status === 'ACTIVE')
@@ -69,6 +69,7 @@ export default function TenantModulesPage() {
                 <span className={module.effectiveState === 'ACTIVE' ? 'state-tag is-active' : 'state-tag'}>{module.effectiveState}</span>
               </div>
               <dl className="module-facts">
+                <div><dt>程序安装</dt><dd>{module.installed ? `已安装 ${module.installedVersion}` : '已授权，待安装'}</dd></div>
                 <div><dt>授权来源</dt><dd>{LICENSE_LABELS[module.licenseType] ?? module.licenseType}</dd></div>
                 <div><dt>有效期</dt><dd>{module.perpetual ? '永久' : module.expiresAt ? new Date(module.expiresAt).toLocaleDateString() : '未设置'}</dd></div>
                 <div><dt>门店名额</dt><dd>{module.assignedStores} / {module.storeQuota}</dd></div>

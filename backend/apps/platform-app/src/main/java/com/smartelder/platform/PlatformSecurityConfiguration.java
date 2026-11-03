@@ -50,6 +50,7 @@ public class PlatformSecurityConfiguration {
                                 "/api/platform/v1/auth/login",
                                 "/api/platform/v1/instances/activate"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/platform/v1/enterprise-applications").permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/platform/v1/instances/heartbeat"
@@ -57,6 +58,7 @@ public class PlatformSecurityConfiguration {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/platform/v1/instances/*/license"
+                                ,"/api/platform/v1/instances/*/module-packages", "/api/platform/v1/instances/*/module-packages/*/*"
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -67,6 +69,8 @@ public class PlatformSecurityConfiguration {
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.GET,"/api/platform/v1/instances/*/commerce/**").permitAll()
+                        .requestMatchers(HttpMethod.POST,"/api/platform/v1/instances/*/commerce/**").permitAll()
                         .requestMatchers("/api/platform/v1/**").authenticated()
                         .anyRequest().denyAll()
                 )

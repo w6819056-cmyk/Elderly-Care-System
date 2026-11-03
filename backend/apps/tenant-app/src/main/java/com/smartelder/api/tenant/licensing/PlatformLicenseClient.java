@@ -42,6 +42,26 @@ public class PlatformLicenseClient {
         String path = "/api/platform/v1/instances/" + properties.getInstancePublicId() + "/license";
         return signed("GET", path, "");
     }
+    public JsonNode availablePackages() {
+        return signed("GET", "/api/platform/v1/instances/"+properties.getInstancePublicId()+"/module-packages", "");
+    }
+    public byte[] downloadPackage(String code,String version) {
+        if(!code.matches("[a-z][a-z0-9-]{1,31}")||!version.matches("[0-9]+\\.[0-9]+\\.[0-9]+"))throw new IllegalArgumentException("模块编号或版本无效");
+        String path="/api/platform/v1/instances/"+properties.getInstancePublicId()+"/module-packages/"+code+"/"+version;
+        var signed=requestSigner.sign("GET",path,"");
+        return client.get().uri(path).headers(h->instanceHeaders(h,signed)).exchange((request,response)->{
+            if(!response.getStatusCode().is2xxSuccessful())throw new IllegalStateException("平台拒绝模块下载，请检查实例状态和模块授权");
+            if(response.getHeaders().getContentLength()>64*1024*1024)throw new IllegalArgumentException("模块包过大");
+            byte[] bytes=response.getBody().readNBytes(64*1024*1024+1);
+            if(bytes.length>64*1024*1024)throw new IllegalArgumentException("模块包过大");return bytes;
+        });
+    }
+
+    public JsonNode commerce(String method,String suffix,Object payload) {
+        if(!suffix.matches("/(catalog|quote|orders(/[A-Za-z0-9_-]+)?(/pay-simulated|/cancel)?)"))throw new IllegalArgumentException("购买请求路径无效");
+        String path="/api/platform/v1/instances/"+properties.getInstancePublicId()+"/commerce"+suffix;
+        return signed(method,path,payload==null?"":write(payload));
+    }
 
     public JsonNode acknowledge(long version, String sha256) {
         String path = "/api/platform/v1/instances/" + properties.getInstancePublicId() + "/ack-license";

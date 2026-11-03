@@ -46,6 +46,174 @@ class TenantIamIntegrationTest {
     @Autowired private ObjectMapper mapper;
 
     @Test
+    void customerManagementRequiresItsPermissionAndReturnsOnlyPublicAccountFields() throws Exception {
+        String token = createHqManagerToken();
+        var get = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/customers");
+        mvc.perform(get.header("Authorization","Bearer "+token)).andExpect(status().isForbidden());
+        long staff = authService.resolveToken(token).accessContext().staffId();
+        jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) SELECT sr.role_id,d.id,'ALLOW' FROM iam_staff_role sr CROSS JOIN iam_permission_definition d WHERE sr.staff_id=:id AND d.permission_code='core.customer.view'").param("id",staff).update();
+        String username="managed_"+UUID.randomUUID().toString().substring(0,8);
+        var registered=mvc.perform(post("/api/public/customer/register").remoteAddress("10.30.5.1").contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(java.util.Map.of("username",username,"password","Customer-Test-2026!","displayName","客户管理测试"))))
+                .andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(registered.getResponse().getContentAsString()).path("data").path("profile").path("publicId").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/customers").param("q",username).header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].username").value(username))
+                .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/customers/"+id).header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.customer.publicId").value(id))
+                .andExpect(jsonPath("$.data.bookings").isEmpty());
+    }
+
+    @Test
+    void headquartersCanReadOptionalCustomerModuleFeatures() throws Exception {
+        String token=createHqManagerToken();long staff=authService.resolveToken(token).accessContext().staffId();
+        jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) SELECT sr.role_id,d.id,'ALLOW' FROM iam_staff_role sr CROSS JOIN iam_permission_definition d WHERE sr.staff_id=:id AND d.permission_code IN ('core.customer.view','membership:member:read')")
+                .param("id",staff).update();
+        String username="module_customer_"+UUID.randomUUID().toString().substring(0,8);
+        var registered=mvc.perform(post("/api/public/customer/register").remoteAddress("10.30.5.2").contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(java.util.Map.of("username",username,"password","Customer-Test-2026!","displayName","模块客户"))))
+                .andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(registered.getResponse().getContentAsString()).path("data").path("profile").path("publicId").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/customers/{id}/module-features",id)
+                        .header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+    }
+
+    @Test
+    void customerBookingsSurviveLoginAndStayPrivate() throws Exception {
+        String no=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",insertStore("ACTIVE")).query(String.class).single();
+        String username="customer_"+UUID.randomUUID().toString().substring(0,8);
+        String registration=mapper.writeValueAsString(java.util.Map.of("username",username,"password","Customer-Test-2026!","displayName","预约用户"));
+        var registered=mvc.perform(post("/api/public/customer/register").remoteAddress("10.30.1.1").contentType(MediaType.APPLICATION_JSON).content(registration)).andExpect(status().isOk()).andReturn();
+        String token=mapper.readTree(registered.getResponse().getContentAsString()).path("data").path("accessToken").asText();
+        String booking=mapper.writeValueAsString(java.util.Map.of("visitorName","本人预约","phone","13800001111","visitType","VISIT","preferredDate",java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1).toString()));
+        mvc.perform(post("/api/public/customer/stores/"+no+"/bookings").header("X-Customer-Token",token).contentType(MediaType.APPLICATION_JSON).content(booking)).andExpect(status().isOk());
+        var login=mvc.perform(post("/api/public/customer/login").remoteAddress("10.30.1.1").contentType(MediaType.APPLICATION_JSON).content(registration)).andExpect(status().isOk()).andReturn();
+        String second=mapper.readTree(login.getResponse().getContentAsString()).path("data").path("accessToken").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/customer/bookings").header("X-Customer-Token",second)).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1)).andExpect(jsonPath("$.data[0].visitorName").value("本人预约"));
+        var other=mvc.perform(post("/api/public/customer/register").remoteAddress("10.30.1.2").contentType(MediaType.APPLICATION_JSON).content(registration.replace(username,username+"_other"))).andExpect(status().isOk()).andReturn();
+        String otherToken=mapper.readTree(other.getResponse().getContentAsString()).path("data").path("accessToken").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/customer/bookings").header("X-Customer-Token",otherToken)).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(0));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/customer/bookings")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/public/customer/logout").header("X-Customer-Token",second)).andExpect(status().isOk());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/customer/me").header("X-Customer-Token",second)).andExpect(status().isUnauthorized());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/auth/me").header("Authorization","Bearer "+token)).andExpect(status().isUnauthorized());
+    }
+    @Test
+    void publicSitePublishesOnlyReviewedSnapshotAndRejectsStaleReview() throws Exception {
+        String token=createHqManagerToken();long manager=authService.resolveToken(token).staffId();
+        jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) SELECT sr.role_id,d.id,'ALLOW' FROM iam_staff_role sr CROSS JOIN iam_permission_definition d WHERE sr.staff_id=:id AND d.permission_code IN ('core.site.view','core.site.manage','core.site.review')").param("id",manager).update();
+        String id=insertStore("ACTIVE");String no=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",id).query(String.class).single();
+        String first=mapper.writeValueAsString(java.util.Map.of("title","首个公开版本","introduction","仅审核通过后公开","heroImage","/images/enterprise-residence.png","gallery",java.util.List.of()));
+        mvc.perform(put("/api/tenant/v1/site-content/"+id).header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(first)).andExpect(status().isOk());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/site/stores/"+no)).andExpect(status().isOk()).andExpect(jsonPath("$.data.content").doesNotExist());
+        mvc.perform(post("/api/tenant/v1/site-content/"+id+"/submit").header("Authorization","Bearer "+token)).andExpect(status().isOk());
+        var editor=mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/site-content/"+id).header("Authorization","Bearer "+token)).andExpect(status().isOk()).andReturn();
+        String hash=mapper.readTree(editor.getResponse().getContentAsString()).path("data").path("reviewToken").asText();
+        mvc.perform(put("/api/tenant/v1/site-content/"+id).header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(first.replace("首个公开版本","后续未送审草稿"))).andExpect(status().isOk());
+        mvc.perform(post("/api/tenant/v1/site-content/"+id+"/approve").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("reviewToken",hash,"note","通过")))).andExpect(status().isOk());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/public/site/stores/"+no)).andExpect(status().isOk()).andExpect(jsonPath("$.data.content.title").value("首个公开版本"));
+        mvc.perform(post("/api/tenant/v1/site-content/"+id+"/submit").header("Authorization","Bearer "+token)).andExpect(status().isOk());
+        mvc.perform(post("/api/tenant/v1/site-content/"+id+"/approve").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("reviewToken",hash)))).andExpect(status().isConflict());
+    }
+
+    @Test
+    void visitIntentCanBeConfirmedAndCompletedWithPermissions() throws Exception {
+        String token=createHqManagerToken();String store=insertStore("ACTIVE");String no=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",store).query(String.class).single();
+        var result=mvc.perform(post("/api/public/store-portals/"+no+"/visit-bookings").contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("visitorName","到访测试","phone","13800001111","visitType","VISIT","preferredDate",java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).plusDays(1).toString(),"remark","上午联系")))).andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(result.getResponse().getContentAsString()).path("data").path("bookingNo").asText();
+        assertThat(jdbc.sql("SELECT status FROM core_visit_booking WHERE public_id=:id").param("id",id).query(String.class).single()).isEqualTo("PENDING");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/tenant/v1/visit-bookings/"+id+"/status").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMED\"}")).andExpect(status().isForbidden());
+        long manager=authService.resolveToken(token).staffId();
+        jdbc.sql("INSERT INTO iam_role_permission(role_id,permission_definition_id,effect) SELECT sr.role_id,d.id,'ALLOW' FROM iam_staff_role sr CROSS JOIN iam_permission_definition d WHERE sr.staff_id=:id AND d.permission_code IN ('core.visit.view','core.visit.manage')").param("id",manager).update();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/visit-bookings").header("Authorization","Bearer "+token)).andExpect(status().isOk());
+        for(String state:java.util.List.of("CONFIRMED","COMPLETED"))mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/tenant/v1/visit-bookings/"+id+"/status").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\""+state+"\"}")).andExpect(status().isOk());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/tenant/v1/visit-bookings/"+id+"/status").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMED\"}")).andExpect(status().isConflict());
+    }
+
+    @Test
+    void portalApplicationRequiresApprovalAndStoreLoginIsBound() throws Exception {
+        String token=createHqManagerToken();String storeId=insertStore("ACTIVE");String other=insertStore("ACTIVE");
+        String storeNo=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",storeId).query(String.class).single();
+        String otherNo=jdbc.sql("SELECT store_no FROM core_store WHERE public_id=:id").param("id",other).query(String.class).single();
+        String username="portal_"+UUID.randomUUID().toString().substring(0,8),role="PORTAL_"+UUID.randomUUID().toString().replace("-", "").substring(0,8).toUpperCase();
+        mvc.perform(post("/api/tenant/v1/hq/roles").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsString(java.util.Map.of("roleCode",role,"name","门店员工","roleDomain","STORE","permissionGroupCodes",java.util.List.of(),"permissionEffects",java.util.Map.of())))).andExpect(status().isOk());
+        var result=mvc.perform(post("/api/public/store-portals/"+storeNo+"/applications").contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsString(java.util.Map.of("username",username,"password","portal-password-123","displayName","申请员工","phone","13"+System.nanoTime()%1000000000,"email","portal@example.com")))).andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(result.getResponse().getContentAsString()).path("data").path("applicationNo").asText();
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM iam_staff WHERE username=:name").param("name",username).query(Long.class).single()).isZero();
+        String review=mapper.writeValueAsString(java.util.Map.of("decision","APPROVE","roleCodes",java.util.List.of(role),"note","同意入职"));
+        mvc.perform(post("/api/tenant/v1/hq/staff-applications/"+id+"/review").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(review)).andExpect(status().isOk());
+        mvc.perform(post("/api/tenant/v1/hq/staff-applications/"+id+"/review").header("Authorization","Bearer "+token).contentType(MediaType.APPLICATION_JSON).content(review)).andExpect(status().isConflict());
+        String login=mapper.writeValueAsString(java.util.Map.of("account",username,"password","portal-password-123"));
+        mvc.perform(post("/api/public/store-portals/"+storeNo+"/login").contentType(MediaType.APPLICATION_JSON).content(login)).andExpect(status().isOk()).andExpect(jsonPath("$.data.principal.staffType").value("STORE"));
+        mvc.perform(post("/api/public/store-portals/"+otherNo+"/login").contentType(MediaType.APPLICATION_JSON).content(login)).andExpect(status().isUnauthorized());
+        assertThat(jdbc.sql("SELECT password_hash FROM iam_staff_application WHERE public_id=:id").param("id",id).query((rs,n)->rs.getString(1)).single()).isNull();
+    }
+
+    @Test
+    void staffAccessDetailsReflectRolesAndExplicitScope() throws Exception {
+        String token=createHqManagerToken();
+        String username="access_"+UUID.randomUUID().toString().substring(0,8);
+        var created=mvc.perform(post("/api/tenant/v1/hq/staff").header("Authorization","Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("username",username,"password","access-password-123","displayName","区域经理","staffType","HQ","roleCodes",java.util.List.of()))))
+                .andExpect(status().isOk()).andReturn();
+        String id=mapper.readTree(created.getResponse().getContentAsString()).path("data").path("publicId").asText();
+        String store=insertStore("ACTIVE");
+        mvc.perform(put("/api/tenant/v1/hq/staff/"+id+"/data-scope").header("Authorization","Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("scopeType","STORES","storePublicIds",java.util.List.of(store)))))
+                .andExpect(status().isOk());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/hq/staff/"+id+"/access").header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.scopeType").value("STORES"))
+                .andExpect(jsonPath("$.data.storePublicIds[0]").value(store))
+                .andExpect(jsonPath("$.data.protectedOwner").value(false));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/hq/staff/"+id+"/access"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void groupAndRoleDetailsRoundTripPermissionSelections() throws Exception {
+        String token=createHqManagerToken();
+        String code="DETAIL_"+UUID.randomUUID().toString().replace("-", "").substring(0,8).toUpperCase();
+        var group=mvc.perform(post("/api/tenant/v1/hq/permission-groups").header("Authorization","Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("groupCode",code,"name","详情权限组","permissionCodes",java.util.List.of("core.store.view")))))
+                .andExpect(status().isOk()).andReturn();
+        String groupId=mapper.readTree(group.getResponse().getContentAsString()).path("data").path("publicId").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/hq/permission-groups/"+groupId).header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.permissionCodes[0]").value("core.store.view"));
+        var role=mvc.perform(post("/api/tenant/v1/hq/roles").header("Authorization","Bearer "+token)
+                .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(java.util.Map.of("roleCode",code,"name","详情角色","roleDomain","HQ","permissionGroupCodes",java.util.List.of(code),"permissionEffects",java.util.Map.of("core.store.manage","DENY")))))
+                .andExpect(status().isOk()).andReturn();
+        String roleId=mapper.readTree(role.getResponse().getContentAsString()).path("data").path("publicId").asText();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/hq/roles/"+roleId).header("Authorization","Bearer "+token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.permissionGroupCodes[0]").value(code))
+                .andExpect(jsonPath("$.data.permissionEffects['core.store.manage']").value("DENY"));
+    }
+
+    @Test
+    void contactFieldsPersistAndInvalidAvatarCreatesNoStaff() throws Exception {
+        String token = createHqManagerToken();
+        String username = "profile_" + UUID.randomUUID().toString().substring(0, 8);
+        String body = mapper.writeValueAsString(java.util.Map.of("username",username,"password","profile-password-123",
+                "displayName","资料测试员工","staffType","HQ","roleCodes",java.util.List.of(),"phone","13800001234","email","profile@example.com"));
+        mvc.perform(post("/api/tenant/v1/hq/staff").header("Authorization","Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phone").value("13800001234"))
+                .andExpect(jsonPath("$.data.email").value("profile@example.com"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tenant/v1/hq/staff")
+                .header("Authorization","Bearer " + token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.username == '"+username+"')].email").value(org.hamcrest.Matchers.hasItem("profile@example.com")));
+        String invalid = body.replace(username,username+"_invalid").replace("{","{\"avatarDataUrl\":\"data:image/png;base64,SGVsbG8=\",");
+        mvc.perform(post("/api/tenant/v1/hq/staff").header("Authorization","Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(invalid)).andExpect(status().is4xxClientError());
+        assertThat(jdbc.sql("SELECT COUNT(*) FROM iam_staff WHERE username=:name").param("name",username+"_invalid").query(Long.class).single()).isZero();
+    }
+
+    @Test
     void permissionGroupsAndRolesAcceptOnlyRegisteredPermissionsAndProtectOwner() throws Exception {
         String token = createHqManagerToken();
         String groupCode = "G_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10).toUpperCase();

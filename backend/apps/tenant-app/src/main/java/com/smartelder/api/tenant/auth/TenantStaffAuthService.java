@@ -26,7 +26,17 @@ public class TenantStaffAuthService {
         this.accessResolver = accessResolver;
     }
 
-    public LoginResult login(String account, String password) {
+    public LoginResult login(String account, String password) {return loginForStore(account,password,null);}
+
+    public LoginResult loginForHq(String account, String password) {
+        LoginResult result = loginForStore(account, password, null);
+        if (!"HQ".equals(result.principal().staffType())) {
+            throw invalidCredentials();
+        }
+        return result;
+    }
+
+    public LoginResult loginForStore(String account,String password,Long expectedStoreId) {
         if (account == null || account.isBlank() || password == null || password.isEmpty()) {
             throw invalidCredentials();
         }
@@ -44,6 +54,7 @@ public class TenantStaffAuthService {
         if (!"ACTIVE".equals(staff.status()) || !passwordEncoder.matches(password, staff.passwordHash())) {
             throw invalidCredentials();
         }
+        if(expectedStoreId!=null&&(!"STORE".equals(staff.staffType())||!expectedStoreId.equals(staff.homeStoreId())))throw invalidCredentials();
         TenantStaffPrincipal principal = principal(staff);
         Instant issuedAt = Instant.now();
         String accessToken = tokenService.issue(staff.publicId(), issuedAt);

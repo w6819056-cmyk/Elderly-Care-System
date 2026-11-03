@@ -28,16 +28,41 @@ describe('tenant application routes', () => {
     vi.stubGlobal('fetch', vi.fn())
   })
 
-  it('renders the tenant login route', () => {
-    renderAt('/login')
-    expect(screen.getByRole('heading', { name: '企业员工登录' })).toBeInTheDocument()
-    expect(screen.getByLabelText('员工账号')).toBeInTheDocument()
+  it('renders the enterprise headquarters login route', () => {
+    renderAt('/hq/login')
+    expect(screen.getByRole('heading', { name: '企业总部登录' })).toBeInTheDocument()
+    expect(screen.getByLabelText('总部员工账号')).toBeInTheDocument()
     expect(screen.getByLabelText('密码')).toBeInTheDocument()
+  })
+
+  it('redirects the legacy shared login URL to headquarters login', async () => {
+    renderAt('/login')
+    expect(await screen.findByRole('heading', { name: '企业总部登录' })).toBeInTheDocument()
   })
 
   it('redirects anonymous workspace visits to login', async () => {
     renderAt('/hq')
-    expect(await screen.findByRole('heading', { name: '企业员工登录' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '企业总部登录' })).toBeInTheDocument()
+  })
+
+  it('renders a store-specific login page for a store portal URL', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      const data = url.endsWith('/api/public/store-portals/001')
+        ? { storeNo: '001', name: '康颐一店', enterpriseName: '康颐集团' }
+        : []
+      return Promise.resolve(new Response(JSON.stringify({ code: 'OK', message: 'success', data }), { status: 200 }))
+    }))
+    renderAt('/store-admin/001/login')
+    expect(await screen.findByRole('heading', { name: '门店员工登录' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '康颐一店' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '企业总部登录' })).not.toBeInTheDocument()
+  })
+
+  it('does not send an anonymous store workspace visit to headquarters login', async () => {
+    renderAt('/store')
+    expect(await screen.findByRole('heading', { name: '门店员工请使用专属入口登录' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '企业总部登录' })).not.toBeInTheDocument()
   })
 
   it('routes an authenticated HQ employee to the HQ workspace', async () => {
@@ -61,14 +86,14 @@ describe('tenant application routes', () => {
     expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument()
   })
 
-  it('does not expose an unlicensed module route', async () => {
+  it('does not expose the legacy membership route', async () => {
     saveTenantSession('tenant-token', '2030-01-01T00:00:00Z', store)
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const data = String(input).endsWith('/auth/me') ? store : []
       return Promise.resolve(new Response(JSON.stringify({ code: 'OK', message: 'success', data }), { status: 200 }))
     }))
     renderAt('/store/membership')
-    expect(await screen.findByRole('heading', { name: '无权访问' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '页面不存在' })).toBeInTheDocument()
     expect(screen.queryByText('会员运营')).not.toBeInTheDocument()
   })
 
@@ -80,7 +105,7 @@ describe('tenant application routes', () => {
       }
       return Promise.reject(new TypeError('network offline'))
     }))
-    renderAt('/store/membership')
+    renderAt('/modules/membership')
     expect(await screen.findByRole('heading', { name: '模块暂不可用' })).toBeInTheDocument()
     expect(screen.queryByText('会员运营')).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: '重试' })).toHaveLength(1)

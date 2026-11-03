@@ -26,7 +26,7 @@ public class TenantStaffAuthController {
 
     @PostMapping("/login")
     public ApiResponse<LoginData> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-        TenantStaffAuthService.LoginResult result = authService.login(request.account(), request.password());
+        TenantStaffAuthService.LoginResult result = authService.loginForHq(request.account(), request.password());
         return ApiResponse.success(new LoginData(result.accessToken(), "Bearer", result.expiresAt(), result.principal()),
                 traceId(httpRequest), clock);
     }

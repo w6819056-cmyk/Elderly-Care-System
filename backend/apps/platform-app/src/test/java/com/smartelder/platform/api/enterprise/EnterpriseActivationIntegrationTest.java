@@ -152,6 +152,101 @@ class EnterpriseActivationIntegrationTest {
     }
 
     @Test
+    void updatesEnterpriseProfileWithoutChangingItsIdentityOrStatus() throws Exception {
+        String token = login();
+        CreatedEnterprise enterprise = createEnterprise(token);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                        "/api/platform/v1/enterprises/{publicId}", enterprise.publicId())
+                        .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"更新后的养老集团","contactName":"李经理","contactPhone":"13900000000"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.name").value("更新后的养老集团"))
+                .andExpect(jsonPath("$.data.contactName").value("李经理"))
+                .andExpect(jsonPath("$.data.orgNo").value(enterprise.orgNo()))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+    }
+
+    @Test
+    void exposesEnterpriseModuleEntitlementsThroughPlatformEnterpriseManagement() throws Exception {
+        String token=login();CreatedEnterprise enterprise=createEnterprise(token);
+        mvc.perform(get("/api/platform/v1/enterprises/{publicId}/modules",enterprise.publicId()).header("Authorization",bearer(token)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    void platformCanUpdateEnterpriseModuleQuotaExpiryAndStatus() throws Exception {
+        String token=login();CreatedEnterprise enterprise=createEnterprise(token);String code="mod"+UUID.randomUUID().toString().substring(0,8);Instant now=Instant.now();
+        jdbcClient.sql("INSERT INTO pf_module_definition(code,name,description,menu_order,sale_status,trial_enabled,created_at,updated_at,version) VALUES(:code,'会员模块','集成测试',910,'ON_SALE',FALSE,:now,:now,0)")
+                .param("code",code).param("now",java.sql.Timestamp.from(now)).update();
+        jdbcClient.sql("INSERT INTO pf_entitlement(enterprise_id,module_id,license_type,status,starts_at,expires_at,perpetual,store_quota,source_order_id,version,created_at,updated_at) SELECT e.id,m.id,'FORMAL','ACTIVE',:startsAt,:expiresAt,FALSE,2,NULL,0,:now,:now FROM pf_enterprise e JOIN pf_module_definition m ON m.code=:code WHERE e.public_id=:enterprise")
+                .param("startsAt",java.sql.Timestamp.from(now.minusSeconds(30))).param("expiresAt",java.sql.Timestamp.from(now.plusSeconds(86400)))
+                .param("now",java.sql.Timestamp.from(now)).param("code",code).param("enterprise",enterprise.publicId()).update();
+        long entitlementId=jdbcClient.sql("SELECT id FROM pf_entitlement WHERE enterprise_id=(SELECT id FROM pf_enterprise WHERE public_id=:enterprise) AND module_id=(SELECT id FROM pf_module_definition WHERE code=:code)")
+                .param("enterprise",enterprise.publicId()).param("code",code).query(Long.class).single();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/platform/v1/enterprises/{publicId}/modules/{id}",enterprise.publicId(),entitlementId)
+                        .header("Authorization",bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"expiresAt":"%s","storeQuota":4,"status":"SUSPENDED"}
+                                """.formatted(now.plusSeconds(86400*10))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.moduleCode").value(code))
+                .andExpect(jsonPath("$.data.status").value("SUSPENDED")).andExpect(jsonPath("$.data.storeQuota").value(4));
+    }
+
+    @Test
+    void registersExistingTenantOrgNoAndIssuesLicenseForTheSameEnterprise() throws Exception {
+        String token = login();
+        String orgNo = "DEMO-LOCAL-" + UUID.randomUUID().toString().substring(0, 8);
+        String response = mvc.perform(post("/api/platform/v1/enterprises/register-existing")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "name", "已部署养老企业",
+                                "orgNo", orgNo,
+                                "contactName", "测试联系人",
+                                "contactPhone", "13800000000"
+                        ))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.orgNo").value(orgNo))
+                .andReturn().getResponse().getContentAsString();
+        String enterprisePublicId = objectMapper.readTree(response).path("data").path("publicId").asText();
+        String activationCode = createActivationCode(token, enterprisePublicId, 5);
+        Activation activation = activate(
+                activationCode,
+                toPem("PUBLIC KEY", INSTANCE_KEY_PAIR.getPublic().getEncoded()),
+                "existing-install-" + UUID.randomUUID(),
+                "existing-db-" + UUID.randomUUID()
+        );
+
+        assertThat(activation.license().path("payloadJson").asText()).contains("\"orgNo\":\"" + orgNo + "\"");
+    }
+
+    @Test
+    void rejectsRegisteringAnOrgNoThatAlreadyExists() throws Exception {
+        String token = login();
+        String orgNo = "DUPLICATE-" + UUID.randomUUID().toString().substring(0, 8);
+        String requestBody = objectMapper.writeValueAsString(Map.of(
+                "name", "已部署养老企业",
+                "orgNo", orgNo,
+                "contactName", "测试联系人",
+                "contactPhone", "13800000000"
+        ));
+
+        mvc.perform(post("/api/platform/v1/enterprises/register-existing")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/platform/v1/enterprises/register-existing")
+                        .header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
+    @Test
     void rejectsHeartbeatWhenSignedBodyIsTampered() throws Exception {
         String token = login();
         CreatedEnterprise enterprise = createEnterprise(token);

@@ -14,6 +14,7 @@
     <name>platform-app</name>
 
     <dependencies>
+        <dependency><groupId>com.smartelder</groupId><artifactId>care-module-package</artifactId><version>${project.version}</version></dependency>
         <dependency>
             <groupId>com.smartelder</groupId>
             <artifactId>care-common</artifactId>

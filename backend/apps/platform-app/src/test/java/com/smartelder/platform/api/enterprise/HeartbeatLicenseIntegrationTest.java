@@ -3,6 +3,7 @@ package com.smartelder.platform.api.enterprise;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +55,7 @@ class HeartbeatLicenseIntegrationTest {
 
     @DynamicPropertySource
     static void licenseSigningKey(DynamicPropertyRegistry registry) {
+        registry.add("platform.commerce.mock-payment-enabled", () -> "true");
         registry.add("platform.license.signing-private-key", () -> toPem(
                 "PRIVATE KEY",
                 LICENSE_KEY_PAIR.getPrivate().getEncoded()
@@ -325,6 +327,36 @@ class HeartbeatLicenseIntegrationTest {
         assertThat(row.get("status")).isEqualTo("MANUAL_REVIEW");
         assertThat(row.get("attempts")).isEqualTo(5);
         assertThat(row.get("error")).asString().contains("缺少正式授权的依赖模块");
+    }
+
+    @Test
+    void signedEnterpriseCanQuotePurchaseAndPayButCannotReadAnotherEnterprisesOrder() throws Exception {
+        var first=activateInstance();var other=activateInstance();
+        String code="shop-"+UUID.randomUUID().toString().substring(0,8);
+        mvc.perform(post("/api/platform/v1/modules").header("Authorization",bearer(first.token())).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("code",code,"name","企业购买模块","description","正式商品","menuOrder",30000+new java.util.Random().nextInt(30000),"trialEnabled",false,"dependencies",java.util.List.of(),"prices",java.util.List.of())))).andExpect(status().isCreated());
+        mvc.perform(post("/api/platform/v1/commerce/products").header("Authorization",bearer(first.token())).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("moduleCode",code,"name","企业年卡","description","企业购买说明","billingMode","PERIOD","durationDays",365,"amount",120,"storeQuota",3)))).andExpect(status().isOk());
+        long product=jdbcClient.sql("SELECT p.id FROM pf_sale_product p JOIN pf_module_definition m ON m.id=p.module_id WHERE m.code=:code").param("code",code).query(Long.class).single();
+        mvc.perform(post("/api/platform/v1/commerce/cards").header("Authorization",bearer(first.token())).contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("productId",product,"imageUrl","/images/membership-cover.svg","sortOrder",0,"enabled",true)))).andExpect(status().isOk());
+        String base="/api/platform/v1/instances/"+first.instancePublicId()+"/commerce";
+        mvc.perform(get(base+"/catalog").headers(signedRequest(first.instancePublicId(),"GET",base+"/catalog","").headers())).andExpect(status().isOk()).andExpect(jsonPath("$.data.cards[?(@.name == '企业年卡')]").exists());
+        String body=objectMapper.writeValueAsString(Map.of("productId",product,"idempotencyKey","shop-test-"+UUID.randomUUID()));
+        mvc.perform(post(base+"/quote").headers(signedRequest(first.instancePublicId(),"POST",base+"/quote",body).headers()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.payableAmount").value(120.00));
+        var created=mvc.perform(post(base+"/orders").headers(signedRequest(first.instancePublicId(),"POST",base+"/orders",body).headers()).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.enterpriseId").value(first.enterprisePublicId())).andReturn();
+        String id=objectMapper.readTree(created.getResponse().getContentAsString()).path("data").path("publicId").asText();
+        mvc.perform(post(base+"/orders").headers(signedRequest(first.instancePublicId(),"POST",base+"/orders",body).headers()).contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isOk()).andExpect(jsonPath("$.data.publicId").value(id));
+        assertThat(jdbcClient.sql("SELECT COUNT(*) FROM pf_subscription_order WHERE public_id=:id AND created_by IS NULL AND source_instance_id IS NOT NULL").param("id",id).query(Long.class).single()).isEqualTo(1L);
+        String foreign="/api/platform/v1/instances/"+other.instancePublicId()+"/commerce/orders/"+id;
+        mvc.perform(get(foreign).headers(signedRequest(other.instancePublicId(),"GET",foreign,"").headers())).andExpect(status().isNotFound());
+        String pay=base+"/orders/"+id+"/pay-simulated";
+        mvc.perform(post(pay).headers(signedRequest(first.instancePublicId(),"POST",pay,"{}").headers()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("FULFILLED"));
+        mvc.perform(get(base+"/catalog")).andExpect(status().is4xxClientError());
+        mvc.perform(post(base+"/quote").headers(signedRequest(first.instancePublicId(),"POST",base+"/quote",body).headers()).contentType(MediaType.APPLICATION_JSON).content(body+" ")).andExpect(status().is4xxClientError());
     }
 
     private ActivatedInstance activateInstance() throws Exception {

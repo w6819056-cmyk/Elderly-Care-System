@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class EnterpriseService {
@@ -39,11 +40,14 @@ public class EnterpriseService {
     ) {
         Instant now = clock.now();
         String publicId = PublicIds.newId("ent");
-        String orgNo = "ORG" + UUID.randomUUID().toString()
-                .replace("-", "")
-                .substring(0, 12)
-                .toUpperCase(Locale.ROOT);
-        jdbcClient.sql("""
+        String requestedOrgNo = command.orgNo() == null ? "" : command.orgNo().trim();
+        String orgNo = requestedOrgNo.isBlank() ? generatedOrgNo() : requestedOrgNo;
+        if (jdbcClient.sql("SELECT COUNT(*) FROM pf_enterprise WHERE org_no = :orgNo")
+                .param("orgNo", orgNo).query(Long.class).single() > 0) {
+            throw new PlatformApiException(ErrorCode.CONFLICT, "企业编号已登记");
+        }
+        try {
+            jdbcClient.sql("""
                         INSERT INTO pf_enterprise(
                             public_id, org_no, name, contact_name, contact_phone,
                             status, created_at, updated_at, version
@@ -59,7 +63,10 @@ public class EnterpriseService {
                 .param("contactPhone", command.contactPhone().trim())
                 .param("createdAt", Timestamp.from(now))
                 .param("updatedAt", Timestamp.from(now))
-                .update();
+                    .update();
+        } catch (DuplicateKeyException exception) {
+            throw new PlatformApiException(ErrorCode.CONFLICT, "企业编号已登记", exception);
+        }
 
         auditService.record(
                 actor.userId(),
@@ -81,7 +88,7 @@ public class EnterpriseService {
         String where = status == null ? "" : "WHERE status = :status";
         String sql = """
                 SELECT public_id, org_no, name, contact_name, contact_phone,
-                       status, created_at, updated_at
+                       status, created_at, updated_at, version
                 FROM pf_enterprise
                 """ + where + " ORDER BY id DESC LIMIT :limit OFFSET :offset";
         var statement = jdbcClient.sql(sql)
@@ -144,10 +151,27 @@ public class EnterpriseService {
         return findByPublicId(publicId);
     }
 
+    public EnterpriseView updateProfile(String publicId, UpdateEnterpriseCommand command, PlatformPrincipal actor, String traceId) {
+        EnterpriseView current = findByPublicId(publicId);
+        String name = command.name() == null ? "" : command.name().trim();
+        String contactName = command.contactName() == null ? "" : command.contactName().trim();
+        String contactPhone = command.contactPhone() == null ? "" : command.contactPhone().trim();
+        if (name.isEmpty() || name.length() > 200 || contactName.isEmpty() || contactName.length() > 100 || contactPhone.isEmpty() || contactPhone.length() > 40) {
+            throw new PlatformApiException(ErrorCode.INVALID_REQUEST, "企业名称、联系人和联系电话均不能为空且长度有效");
+        }
+        int updated = jdbcClient.sql("UPDATE pf_enterprise SET name=:name,contact_name=:contactName,contact_phone=:contactPhone,updated_at=:updatedAt,version=version+1 WHERE public_id=:publicId AND version=:version")
+                .param("name", name).param("contactName", contactName).param("contactPhone", contactPhone)
+                .param("updatedAt", Timestamp.from(clock.now())).param("publicId", publicId)
+                .param("version", current.version()).update();
+        if (updated != 1) throw new PlatformApiException(ErrorCode.CONFLICT, "企业资料已被其他操作修改");
+        auditService.record(actor.userId(), actor.publicId(), "PLATFORM_ENTERPRISE_PROFILE_UPDATED", "ENTERPRISE", publicId, "{\"fields\":[\"name\",\"contactName\",\"contactPhone\"]}", traceId);
+        return findByPublicId(publicId);
+    }
+
     public EnterpriseView findByPublicId(String publicId) {
         return jdbcClient.sql("""
                         SELECT public_id, org_no, name, contact_name, contact_phone,
-                               status, created_at, updated_at
+                               status, created_at, updated_at, version
                         FROM pf_enterprise
                         WHERE public_id = :publicId
                         """)
@@ -183,8 +207,16 @@ public class EnterpriseService {
                 rs.getString("contact_phone"),
                 rs.getString("status"),
                 rs.getTimestamp("created_at").toInstant(),
-                rs.getTimestamp("updated_at").toInstant()
+                rs.getTimestamp("updated_at").toInstant(),
+                rs.getLong("version")
         );
+    }
+
+    private static String generatedOrgNo() {
+        return "ORG" + UUID.randomUUID().toString()
+                .replace("-", "")
+                .substring(0, 12)
+                .toUpperCase(Locale.ROOT);
     }
 
     private static EnterpriseStatus parseStatus(String value) {
@@ -206,10 +238,13 @@ public class EnterpriseService {
 
     public record CreateEnterpriseCommand(
             String name,
+            String orgNo,
             String contactName,
             String contactPhone
     ) {
     }
+
+    public record UpdateEnterpriseCommand(String name, String contactName, String contactPhone) {}
 
     public record EnterpriseView(
             String publicId,
@@ -219,7 +254,8 @@ public class EnterpriseService {
             String contactPhone,
             String status,
             Instant createdAt,
-            Instant updatedAt
+            Instant updatedAt,
+            long version
     ) {
     }
 
