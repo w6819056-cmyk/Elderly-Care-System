@@ -22,7 +22,20 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
-  const body = await response.json() as ApiResponse<T>
+  let body: ApiResponse<T>
+  try {
+    body = JSON.parse(await response.text()) as ApiResponse<T>
+  } catch {
+    if (response.status === 401) {
+      clearTenantSession()
+      window.dispatchEvent(new Event(TENANT_SESSION_EXPIRED_EVENT))
+    }
+    throw new TenantApiError(
+      response.status,
+      'INVALID_RESPONSE',
+      response.ok ? '企业服务返回了无法识别的数据格式' : '企业服务暂不可用，请检查后端服务后重试'
+    )
+  }
   if (!response.ok || body.code !== 'OK') {
     if (response.status === 401) {
       clearTenantSession()

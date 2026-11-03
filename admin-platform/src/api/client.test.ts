@@ -41,4 +41,10 @@ describe('platform API client', () => {
       message: '平台服务暂不可用，请检查后端服务后重试'
     })
   })
+
+  it('clears the platform session on 401 even when the response body is not JSON', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 401 }))
+    await expect(request('/api/platform/v1/auth/me')).rejects.toMatchObject({ status: 401, code: 'INVALID_RESPONSE' })
+    expect(localStorage.getItem('platform.access_token')).toBeNull()
+  })
 })
